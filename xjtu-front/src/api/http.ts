@@ -5,7 +5,7 @@ const baseURL = "http://127.0.0.1:8000";
 
 export const http = axios.create({
   baseURL,
-  timeout: 30000
+  timeout: 60000
 });
 
 http.interceptors.request.use((config) => {
@@ -29,8 +29,8 @@ http.interceptors.response.use(
 export function normalizeError(error: unknown): Error {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail;
-    return new Error(detail || error.message || "Request failed");
+    return new Error(detail || error.message || "请求失败");
   }
   if (error instanceof Error) return error;
-  return new Error("Unknown error");
+  return new Error("未知错误");
 }

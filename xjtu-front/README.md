@@ -2,6 +2,8 @@
 
 React + TypeScript front-end integration template for `xjtu-back`.
 
+UI layout is adapted from `src/pages/ai_ui.py` (sidebar + chat stream + right utility panel).
+
 ## Start
 
 ```bash
@@ -15,6 +17,8 @@ Default page: `http://127.0.0.1:5174`
 
 - Axios wrapper with token injection and global error normalization.
 - WebSocket manager for streaming chat (`/ws/chat/completions`).
+- Session retrieval tuning panel (`top_k/threshold/fusion/alpha`) with immediate apply.
+- Runtime diagnostics panel (`GET /debug/runtime`) for current backend settings.
 - End-to-end demo page implementing the recommended call order.
 - Basic UI and error banner for API failure feedback.
 

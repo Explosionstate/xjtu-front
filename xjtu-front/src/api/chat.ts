@@ -4,6 +4,8 @@ import type { ChatCompletionResponse } from "../types/api";
 export async function chatCompletions(payload: {
   conversation_id?: string;
   kb_ids?: string[];
+  document_ids?: string[];
+  llm_enabled?: boolean;
   messages: Array<{ role: "user" | "assistant"; content: string }>;
 }): Promise<ChatCompletionResponse> {
   const { data } = await http.post<ChatCompletionResponse>("/chat/completions", payload);
@@ -13,6 +15,7 @@ export async function chatCompletions(payload: {
 export async function retrievalDebug(payload: {
   query: string;
   kb_ids?: string[];
+  document_ids?: string[];
   top_k?: number;
   score_threshold?: number;
   fusion_mode?: string;

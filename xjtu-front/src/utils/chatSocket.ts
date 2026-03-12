@@ -22,19 +22,19 @@ export class ChatSocket {
         if (data.type === "meta" && handlers.onMeta) handlers.onMeta(data);
         if (data.type === "delta" && handlers.onDelta) handlers.onDelta(data.content || "");
         if (data.type === "done" && handlers.onDone) handlers.onDone(data);
-        if (data.type === "error" && handlers.onError) handlers.onError(data.detail || "Socket error");
+        if (data.type === "error" && handlers.onError) handlers.onError(data.detail || "流式连接错误");
       } catch {
-        if (handlers.onError) handlers.onError("Invalid socket packet");
+        if (handlers.onError) handlers.onError("无效的流式数据包");
       }
     };
 
-    this.socket.onerror = () => handlers.onError?.("WebSocket connection failed");
+    this.socket.onerror = () => handlers.onError?.("WebSocket 连接失败");
     this.socket.onclose = () => handlers.onClose?.();
   }
 
   send(payload: unknown): void {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      throw new Error("WebSocket not connected");
+      throw new Error("WebSocket 尚未连接");
     }
     this.socket.send(JSON.stringify(payload));
   }
