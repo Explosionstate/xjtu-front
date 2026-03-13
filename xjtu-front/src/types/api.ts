@@ -3,6 +3,14 @@ export interface TokenResponse {
   token_type: string;
 }
 
+export interface SsoExchangeResponse {
+  access_token: string;
+  token_type: string;
+  login_name: string;
+  role: string;
+  source_table: string;
+}
+
 export interface UserItem {
   id: number;
   login_name: string;

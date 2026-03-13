@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import "./App.css";
 
-import { login } from "./api/auth";
+import { login, ssoExchange } from "./api/auth";
 import { chatCompletions, retrievalDebug } from "./api/chat";
 import { setSensitiveWords } from "./api/config";
 import { batchDeleteDocuments, listDocuments, uploadDocuments } from "./api/documents";
@@ -16,6 +16,8 @@ import { getRuntimeDebug } from "./api/runtime";
 import type { ChatLogItem, DocumentItem, KnowledgeBaseItem } from "./types/api";
 import { setToken } from "./utils/auth";
 import { ChatSocket } from "./utils/chatSocket";
+import KbDocManagePage from "./pages/KbDocManagePage";
+import KbUpdateUploadPage from "./pages/KbUpdateUploadPage";
 
 const socket = new ChatSocket();
 
@@ -29,6 +31,7 @@ const defaultConfig: RetrievalConfig = {
 type ChatMessage = { role: "user" | "assistant"; content: string; id: number };
 
 export default function App() {
+  const [currentPage, setCurrentPage] = useState<"ai" | "kbdoc" | "kbops">("ai");
   const [error, setError] = useState("");
   const [tokenReady, setTokenReady] = useState(false);
 
@@ -74,6 +77,28 @@ export default function App() {
       setError((e as Error).message || "操作失败");
     }
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ticket = params.get("sso_ticket");
+    if (!ticket) return;
+
+    // Remove sso_ticket from URL immediately to avoid duplicate exchange
+    // in React StrictMode development double-invocation.
+    params.delete("sso_ticket");
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
+    window.history.replaceState({}, "", nextUrl);
+
+    runSafely(async () => {
+      const data = await ssoExchange(ticket);
+      setToken(data.access_token);
+      setTokenReady(true);
+      setLoginName(data.login_name);
+      setPassword("");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSendMessage = () => {
     if (!question.trim()) return;
@@ -135,6 +160,22 @@ export default function App() {
     }
   };
 
+  if (currentPage === "kbdoc") {
+    return (
+      <main className="qw-layout" style={{ display: "block", minHeight: "100vh" }}>
+        <div style={{ padding: 16 }}>
+          <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("ai")}>返回 AI 主界面</button>
+        </div>
+        <KbDocManagePage onError={setError} />
+        {error && <div className="qw-toast-error" style={{ margin: "0 16px 16px" }}>{error}</div>}
+      </main>
+    );
+  }
+
+  if (currentPage === "kbops") {
+    return <KbUpdateUploadPage onError={setError} onBack={() => setCurrentPage("ai")} />;
+  }
+
   return (
     <main className="qw-layout">
       {/* ==================== 左侧边栏 ==================== */}
@@ -143,6 +184,9 @@ export default function App() {
           <div className="qw-logo">🌌</div>
           <span>西交 AI 助手</span>
         </div>
+
+        <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("kbdoc")}>专用：知识库编辑/文档上传</button>
+        <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("kbops")}>专用：PUT更新/批量上传</button>
 
         <button
           className="qw-btn qw-btn-primary qw-new-chat-btn"
