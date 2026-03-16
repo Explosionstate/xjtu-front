@@ -1,303 +1,509 @@
 import sys
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QScrollArea, QLabel, QLineEdit, QDoubleSpinBox, QComboBox,
-                             QPushButton, QFrame, QGroupBox)
-from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QFont
+import uuid
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
+                             QVBoxLayout, QPushButton, QLabel, QLineEdit,
+                             QScrollArea, QGridLayout, QFrame, QSizePolicy,
+                             QListWidget, QListWidgetItem, QCheckBox)
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtWidgets import QGraphicsDropShadowEffect
 
 
-class SearchParamOptimizationPanel(QWidget):
-    """
-    搜索参数调优面板 - 支持完整的滑动和文字清晰显示
-    """
+class NeonButton(QPushButton):
+    """自定义带霓虹发光效果的按钮（保留原版逻辑，样式中增加反馈）"""
 
+    def __init__(self, text, is_primary=False):
+        super().__init__(text)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        if is_primary:
+            self.setObjectName("PrimaryButton")
+            # 添加发光阴影效果 (保留原版)
+            shadow = QGraphicsDropShadowEffect()
+            shadow.setBlurRadius(20)
+            shadow.setColor(QColor("#00E5FF"))
+            shadow.setOffset(0, 0)
+            self.setGraphicsEffect(shadow)
+        else:
+            self.setObjectName("SecondaryButton")
+
+
+class AINexusApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.setWindowTitle("ai助手")
+        self.resize(1200, 800)
+
+        # 1. 保留并结构化原有的历史记录数据
+        self.current_session_id = None
+        self.chat_history_data = {
+            "session_1": {
+                "title": "Quantum Computing...",
+                "messages": [
+                    ("user", "Summarize the key findings of the attached paper on quantum machine learning."),
+                    ("ai",
+                     "Absolutely. Analyzing the impact of QML, we see significant generative concepts and ultimate growth in pattern recognition...")
+                ]
+            },
+            "session_2": {
+                "title": "Market Analysis Q3",
+                "messages": [("ai", "Here is the preliminary Market Analysis for Q3. How would you like to dive in?")]
+            },
+            "session_3": {
+                "title": "Design Sprint Draft",
+                "messages": [("user", "Help me draft a design sprint."),
+                             ("ai", "Sure, let's start with defining our primary goal for the sprint.")]
+            }
+        }
+
         self.init_ui()
+        self.apply_styles()
+
+        # 默认选中第一个历史记录 (保留原版打开就有消息的状态)
+        first_item = self.history_list.item(0)
+        if first_item:
+            self.history_list.setCurrentItem(first_item)
+            self.switch_chat_session(first_item)
 
     def init_ui(self):
-        """初始化用户界面"""
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(15, 15, 15, 15)
-        main_layout.setSpacing(12)
-
-        # 标题
-        title = QLabel("检索参数调优")
-        title.setObjectName("SearchParamTitle")
-        font = QFont()
-        font.setPointSize(16)
-        font.setBold(True)
-        title.setFont(font)
-        main_layout.addWidget(title)
-
-        # 分隔线
-        separator = QFrame()
-        separator.setFrameShape(QFrame.HLine)
-        separator.setStyleSheet("color: rgba(0, 229, 255, 0.2);")
-        main_layout.addWidget(separator)
-
-        # 创建滚动区域以支持内容溢出时的滑动
-        scroll_area = QScrollArea()
-        scroll_area.setObjectName("ParamScrollArea")
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: transparent;
-            }
-            QScrollBar:vertical {
-                border: none;
-                background: rgba(255, 255, 255, 0.03);
-                width: 10px;
-                border-radius: 5px;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(255, 255, 255, 0.25);
-                border-radius: 5px;
-                min-height: 20px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: rgba(255, 255, 255, 0.35);
-            }
-        """)
-
-        # 内容容器
-        content_widget = QWidget()
-        content_layout = QVBoxLayout()
-        content_layout.setSpacing(12)
-
-        # 描述文本
-        description = QLabel("按会话调整参数回传输，便于评估检索效果")
-        description.setObjectName("ParamDescription")
-        description.setWordWrap(True)
-        description.setStyleSheet("""
-            QLabel {
-                color: #9CA3AF;
-                font-size: 13px;
-                font-weight: 500;
-                padding: 10px;
-                background-color: rgba(0, 229, 255, 0.05);
-                border: 1px solid rgba(0, 229, 255, 0.2);
-                border-radius: 6px;
-            }
-        """)
-        content_layout.addWidget(description)
-
-        # 参数1：回召替换
-        param1_layout = QHBoxLayout()
-        param1_label = QLabel("召回替换")
-        param1_label.setStyleSheet("color: #E0E7FF; font-weight: 600; font-size: 14px; min-width: 100px;")
-        param1_input = QLineEdit()
-        param1_input.setPlaceholderText("8")
-        param1_input.setStyleSheet(self.get_input_style())
-        param1_layout.addWidget(param1_label)
-        param1_layout.addWidget(param1_input)
-        param1_layout.addStretch()
-        content_layout.addLayout(param1_layout)
-
-        # 参数2：分国值
-        param2_layout = QHBoxLayout()
-        param2_label = QLabel("分國值")
-        param2_label.setStyleSheet("color: #E0E7FF; font-weight: 600; font-size: 14px; min-width: 100px;")
-        param2_input = QDoubleSpinBox()
-        param2_input.setValue(0.15)
-        param2_input.setDecimals(2)
-        param2_input.setStyleSheet(self.get_input_style())
-        param2_layout.addWidget(param2_label)
-        param2_layout.addWidget(param2_input)
-        param2_layout.addStretch()
-        content_layout.addLayout(param2_layout)
-
-        # 参数3：模式
-        param3_layout = QHBoxLayout()
-        param3_label = QLabel("模式")
-        param3_label.setStyleSheet("color: #E0E7FF; font-weight: 600; font-size: 14px; min-width: 100px;")
-        param3_combo = QComboBox()
-        param3_combo.addItems(["weighted", "standard", "advanced"])
-        param3_combo.setStyleSheet(self.get_input_style())
-        param3_layout.addWidget(param3_label)
-        param3_layout.addWidget(param3_combo)
-        param3_layout.addStretch()
-        content_layout.addLayout(param3_layout)
-
-        # 参数4：权重值
-        param4_layout = QHBoxLayout()
-        param4_label = QLabel("權重")
-        param4_label.setStyleSheet("color: #E0E7FF; font-weight: 600; font-size: 14px; min-width: 100px;")
-        param4_input = QLineEdit()
-        param4_input.setPlaceholderText("0.9")
-        param4_input.setStyleSheet(self.get_input_style())
-        param4_layout.addWidget(param4_label)
-        param4_layout.addWidget(param4_input)
-        param4_layout.addStretch()
-        content_layout.addLayout(param4_layout)
-
-        # 附加信息
-        info_label = QLabel("提示：参数值的调整会实时影响检索结果的排序和评分。")
-        info_label.setWordWrap(True)
-        info_label.setStyleSheet("""
-            QLabel {
-                color: #9CA3AF;
-                font-size: 12px;
-                margin-top: 10px;
-                padding: 8px;
-                background-color: rgba(0, 229, 255, 0.03);
-                border-radius: 4px;
-            }
-        """)
-        content_layout.addWidget(info_label)
-
-        content_layout.addStretch()
-        content_widget.setLayout(content_layout)
-        scroll_area.setWidget(content_widget)
-
-        main_layout.addWidget(scroll_area)
-
-        # 底部按钮
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(10)
-
-        reset_button = QPushButton("重置参数")
-        reset_button.setStyleSheet(self.get_button_style("secondary"))
-        reset_button.setMinimumHeight(40)
-
-        apply_button = QPushButton("应用参数")
-        apply_button.setStyleSheet(self.get_button_style("primary"))
-        apply_button.setMinimumHeight(40)
-
-        button_layout.addWidget(reset_button)
-        button_layout.addWidget(apply_button)
-
-        main_layout.addLayout(button_layout)
-
-        self.setLayout(main_layout)
-        self.setObjectName("SearchParamOptimization")
-
-    @staticmethod
-    def get_input_style():
-        """获取输入框样式"""
-        return """
-            QLineEdit, QDoubleSpinBox, QComboBox {
-                background-color: rgba(255, 255, 255, 0.05);
-                color: #00E5FF;
-                border: 1px solid rgba(0, 229, 255, 0.3);
-                border-radius: 6px;
-                padding: 8px 12px;
-                font-size: 13px;
-                font-weight: 500;
-                selection-background-color: rgba(0, 229, 255, 0.4);
-                min-height: 30px;
-            }
-            QLineEdit:focus, QDoubleSpinBox:focus, QComboBox:focus {
-                border: 2px solid #00E5FF;
-                background-color: rgba(0, 229, 255, 0.08);
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 20px;
-                background-color: transparent;
-            }
-            QComboBox::down-arrow {
-                image: none;
-                color: #00E5FF;
-            }
-        """
-
-    @staticmethod
-    def get_button_style(button_type):
-        """获取按钮样式"""
-        if button_type == "primary":
-            return """
-                QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                        stop:0 #0072FF, stop:1 #00E5FF);
-                    color: white;
-                    border: none;
-                    border-radius: 8px;
-                    font-weight: bold;
-                    font-size: 15px;
-                    padding: 10px 20px;
-                }
-                QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #005BCC, stop:1 #00B8CC);
-                }
-                QPushButton:pressed {
-                    padding-top: 12px;
-                    padding-bottom: 8px;
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                        stop:0 #0047A3, stop:1 #0093A3);
-                }
-            """
-        else:  # secondary
-            return """
-                QPushButton {
-                    background-color: rgba(255, 255, 255, 0.05);
-                    color: #00E5FF;
-                    border: 1px solid rgba(0, 229, 255, 0.3);
-                    border-radius: 8px;
-                    font-weight: bold;
-                    font-size: 15px;
-                    padding: 10px 20px;
-                }
-                QPushButton:hover {
-                    background-color: rgba(0, 229, 255, 0.1);
-                    border: 1px solid rgba(0, 229, 255, 0.6);
-                }
-                QPushButton:pressed {
-                    padding-top: 12px;
-                    padding-bottom: 8px;
-                    background-color: rgba(0, 229, 255, 0.18);
-                }
-            """
-
-
-class MainWindow(QMainWindow):
-    """主窗口"""
-
-    def __init__(self):
-        super().__init__()
-        self.init_ui()
-
-    def init_ui(self):
-        """初始化主窗口"""
-        self.setWindowTitle("AI 助手 - 检索参数调优")
-        self.setGeometry(100, 100, 600, 700)
-
-        # 设置深色主题
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #0A0F1C;
-            }
-        """)
-
-        # 创建中央窗口
         central_widget = QWidget()
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        # 添加参数调优面板
-        panel = SearchParamOptimizationPanel()
-        layout.addWidget(panel)
-
-        central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
+        main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-def main():
+        # ================= 1. 构建左侧边栏 (Sidebar) =================
+        sidebar = QFrame()
+        sidebar.setObjectName("Sidebar")
+        sidebar.setFixedWidth(260)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(20, 30, 20, 30)
+        sidebar_layout.setSpacing(20)
+
+        logo_label = QLabel("🌌 Nexus AIPrime")
+        logo_label.setObjectName("LogoText")
+
+        # 新建聊天按钮 (保留原版文案)
+        new_chat_btn = NeonButton("+  New Chat", is_primary=True)
+        new_chat_btn.setFixedHeight(45)
+        new_chat_btn.clicked.connect(self.start_new_chat)
+
+        history_label = QLabel("Recent Chats")
+        history_label.setObjectName("SectionTitle")
+
+        # 历史记录列表 (升级为 QListWidget 以支持选中和切换功能)
+        self.history_list = QListWidget()
+        self.history_list.setObjectName("HistoryList")
+        self.history_list.itemClicked.connect(self.switch_chat_session)
+
+        # 加载原版的历史记录列表
+        for session_id, data in self.chat_history_data.items():
+            item = QListWidgetItem(data["title"])
+            item.setData(Qt.ItemDataRole.UserRole, session_id)
+            self.history_list.addItem(item)
+
+        sidebar_layout.addWidget(logo_label)
+        sidebar_layout.addWidget(new_chat_btn)
+        sidebar_layout.addWidget(history_label)
+        sidebar_layout.addWidget(self.history_list)
+
+        # ================= 2. 构建中间聊天区 (Chat Area) =================
+        chat_area = QFrame()
+        chat_area.setObjectName("ChatArea")
+        chat_layout = QVBoxLayout(chat_area)
+        chat_layout.setContentsMargins(30, 30, 30, 30)
+
+        self.chat_header = QLabel("Chat Stream")
+        self.chat_header.setObjectName("ChatHeader")
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setObjectName("ScrollArea")
+
+        self.scroll_content = QWidget()
+        self.scroll_content.setObjectName("ScrollContent")
+        self.scroll_layout = QVBoxLayout(self.scroll_content)
+        self.scroll_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.scroll_layout.setSpacing(15)  # 调整气泡间距
+        self.scroll_area.setWidget(self.scroll_content)
+
+        # --- 新增功能：通义千问风格的选项开关 ---
+        options_layout = QHBoxLayout()
+        options_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        self.search_toggle = QCheckBox("🌐 Web Search")
+        self.search_toggle.setObjectName("CustomToggle")
+        self.search_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.think_toggle = QCheckBox("🧠 Deep Think")
+        self.think_toggle.setObjectName("CustomToggle")
+        self.think_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        options_layout.addWidget(self.search_toggle)
+        options_layout.addWidget(self.think_toggle)
+
+        # 底部输入框 (保留原版结构)
+        input_container = QFrame()
+        input_container.setObjectName("InputContainer")
+        input_layout = QHBoxLayout(input_container)
+        input_layout.setContentsMargins(15, 10, 15, 10)
+
+        self.input_box = QLineEdit()
+        self.input_box.setPlaceholderText("Message Nexus AI...")
+        self.input_box.setObjectName("InputBox")
+        self.input_box.returnPressed.connect(self.send_message)
+
+        send_btn = NeonButton("Send 🚀", is_primary=True)
+        send_btn.setFixedSize(100, 40)
+        send_btn.clicked.connect(self.send_message)
+
+        input_layout.addWidget(self.input_box)
+        input_layout.addWidget(send_btn)
+
+        # 组装聊天区
+        chat_layout.addWidget(self.chat_header)
+        chat_layout.addWidget(self.scroll_area)
+        chat_layout.addLayout(options_layout)  # 插入开关
+        chat_layout.addWidget(input_container)
+
+        # ================= 3. 构建右侧功能区 (Right Panel) =================
+        right_panel = QFrame()
+        right_panel.setObjectName("RightPanel")
+        right_panel.setFixedWidth(320)
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(20, 30, 20, 30)
+
+        welcome_label = QLabel("Welcome to AI")
+        welcome_label.setObjectName("SectionTitle")
+
+        grid_layout = QGridLayout()
+        grid_layout.setSpacing(15)
+
+        # 完全保留原版的卡片文案
+        cards = [
+            ("📝", "Draft Blog Post"),
+            ("🐍", "Write Python Code"),
+            ("📈", "Analyze Trends"),
+            ("🎨", "Image Prompt")
+        ]
+
+        for i, (icon, text) in enumerate(cards):
+            # 升级为可点击带有反馈的卡片，但保留原版的内部排版布局
+            card = QPushButton()
+            card.setObjectName("ActionCard")
+            card.setCursor(Qt.CursorShape.PointingHandCursor)
+
+            card_layout = QVBoxLayout(card)
+            card_layout.addWidget(QLabel(icon))
+            card_text = QLabel(text)
+            card_text.setWordWrap(True)
+            card_layout.addWidget(card_text)
+
+            # 点击卡片填入输入框功能
+            card.clicked.connect(lambda checked, t=text: self.input_box.setText(f"Help me {t.lower()}..."))
+            grid_layout.addWidget(card, i // 2, i % 2)
+
+        right_layout.addWidget(welcome_label)
+        right_layout.addSpacing(30)
+        right_layout.addLayout(grid_layout)
+        right_layout.addStretch()
+
+        main_layout.addWidget(sidebar)
+        main_layout.addWidget(chat_area)
+        main_layout.addWidget(right_panel)
+
+    def start_new_chat(self):
+        """新建会话功能"""
+        session_id = str(uuid.uuid4())
+        title = "New Chat"
+        self.chat_history_data[session_id] = {"title": title, "messages": []}
+
+        item = QListWidgetItem(title)
+        item.setData(Qt.ItemDataRole.UserRole, session_id)
+        self.history_list.insertItem(0, item)
+        self.history_list.setCurrentItem(item)
+        self.switch_chat_session(item)
+
+    def switch_chat_session(self, item):
+        """切换左侧历史记录时，加载对应聊天记录"""
+        session_id = item.data(Qt.ItemDataRole.UserRole)
+        self.current_session_id = session_id
+        session_data = self.chat_history_data[session_id]
+
+        self.chat_header.setText(session_data["title"])
+
+        # 清理当前屏幕的消息
+        while self.scroll_layout.count():
+            child = self.scroll_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # 加载历史消息
+        for role, text in session_data["messages"]:
+            self.scroll_layout.addWidget(self.create_message_bubble(text, role == "user"))
+
+        QTimer.singleShot(50, self.scroll_to_bottom)
+
+    def send_message(self):
+        """发送消息逻辑"""
+        text = self.input_box.text().strip()
+        if not text or not self.current_session_id:
+            return
+
+        # 获取开关状态
+        is_search = self.search_toggle.isChecked()
+        is_think = self.think_toggle.isChecked()
+
+        self.input_box.clear()
+
+        # 1. 渲染用户消息
+        self.chat_history_data[self.current_session_id]["messages"].append(("user", text))
+        self.scroll_layout.addWidget(self.create_message_bubble(text, is_user=True))
+        self.scroll_to_bottom()
+
+        # 如果是新会话的第一句话，更新标题
+        if len(self.chat_history_data[self.current_session_id]["messages"]) == 1:
+            title = text[:15] + "..." if len(text) > 15 else text
+            self.chat_history_data[self.current_session_id]["title"] = title
+            self.history_list.currentItem().setText(title)
+            self.chat_header.setText(title)
+
+        # 2. 模拟 AI 回复
+        QTimer.singleShot(600, lambda: self.simulate_ai_response(text, is_search, is_think))
+
+    def simulate_ai_response(self, text, is_search, is_think):
+        reply_prefix = ""
+        if is_think:
+            reply_prefix += "[Deep Thinking Completed] \n"
+        if is_search:
+            reply_prefix += "[Web Search Results Included] \n"
+
+        ai_reply = reply_prefix + f"I have received your query about: '{text}'. This is a simulated AI response."
+        self.chat_history_data[self.current_session_id]["messages"].append(("ai", ai_reply))
+        self.scroll_layout.addWidget(self.create_message_bubble(ai_reply, is_user=False))
+        self.scroll_to_bottom()
+
+    def create_message_bubble(self, text, is_user=False):
+        """完全基于您原有的函数改造：保留阴影特效，升级为通义千问布局格式"""
+        container = QFrame()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 10, 0, 10)
+
+        bubble = QLabel(text)
+        bubble.setWordWrap(True)
+        bubble.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        bubble.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        bubble.setMaximumWidth(700)  # 防止文字太长撑满屏幕
+
+        if is_user:
+            bubble.setObjectName("UserBubble")
+            layout.addStretch()  # 左侧添加弹簧，把气泡推到右边
+            layout.addWidget(bubble)
+
+            # 加入用户头像标识
+            avatar = QLabel("U")
+            avatar.setObjectName("UserAvatar")
+            layout.addWidget(avatar, alignment=Qt.AlignmentFlag.AlignTop)
+        else:
+            bubble.setObjectName("AIBubble")
+
+            # 加入 AI 头像标识
+            avatar = QLabel("AI")
+            avatar.setObjectName("AIAvatar")
+            layout.addWidget(avatar, alignment=Qt.AlignmentFlag.AlignTop)
+            layout.addWidget(bubble)
+
+            # 保留您原本设计的 AI 消息发光阴影效果
+            shadow = QGraphicsDropShadowEffect()
+            shadow.setBlurRadius(15)
+            shadow.setColor(QColor(0, 229, 255, 60))
+            shadow.setOffset(0, 0)
+            bubble.setGraphicsEffect(shadow)
+
+            layout.addStretch()  # 右侧添加弹簧，把气泡推到左边
+
+        return container
+
+    def scroll_to_bottom(self):
+        scrollbar = self.scroll_area.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
+
+    def apply_styles(self):
+        """全局样式：保留原风格，追加交互反馈和气泡颜色"""
+        qss = """
+        /* 全局深色背景设定 (完全保留) */
+        QWidget {
+            background-color: #0A0F1C;
+            color: #E0E7FF;
+            font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+            font-size: 14px;
+        }
+
+        #Sidebar, #RightPanel {
+            background-color: rgba(16, 24, 39, 0.8);
+            border-right: 1px solid rgba(0, 229, 255, 0.1);
+            border-left: 1px solid rgba(0, 229, 255, 0.1);
+        }
+
+        #ChatArea {
+            background-color: #050810;
+        }
+
+        #LogoText {
+            font-size: 20px;
+            font-weight: bold;
+            color: #00E5FF;
+            padding-bottom: 20px;
+        }
+
+        #SectionTitle {
+            font-size: 16px;
+            font-weight: bold;
+            color: #9CA3AF;
+        }
+
+        #ChatHeader {
+            font-size: 18px;
+            font-weight: bold;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* ==== 按钮和交互反馈 (保留原有渐变色并增加按压反馈) ==== */
+        #PrimaryButton {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0072FF, stop:1 #00E5FF);
+            color: white;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 15px;
+            border: none;
+        }
+        #PrimaryButton:hover {
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #005BCC, stop:1 #00B8CC);
+        }
+        #PrimaryButton:pressed {
+            padding-top: 2px; /* 点击下陷反馈 */
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0047A3, stop:1 #0093A3);
+        }
+
+        /* ==== 左侧历史记录 QListWidget 适配原版的 HistoryItem 样式 ==== */
+        #HistoryList {
+            background: transparent;
+            border: none;
+            outline: none;
+        }
+        #HistoryList::item {
+            color: #9CA3AF;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            border: 1px solid transparent;
+        }
+        #HistoryList::item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            color: #00E5FF;
+            border: 1px solid rgba(0, 229, 255, 0.3);
+        }
+        #HistoryList::item:selected {
+            background-color: rgba(0, 229, 255, 0.15);
+            color: #00E5FF;
+            border: 1px solid #00E5FF;
+            font-weight: bold;
+        }
+
+        /* ==== 通义千问风格的聊天气泡和头像 ==== */
+        #UserBubble {
+            background-color: rgba(0, 114, 255, 0.8); /* 用户的蓝色底 */
+            color: #FFFFFF;
+            padding: 15px 20px;
+            border-radius: 12px;
+            border-top-right-radius: 2px;
+        }
+        #AIBubble {
+            background-color: rgba(0, 229, 255, 0.05); /* 您原版的底色 */
+            color: #E0E7FF;
+            padding: 15px 20px;
+            border-radius: 12px;
+            border-top-left-radius: 2px;
+            border: 1px solid rgba(0, 229, 255, 0.4);
+        }
+        #UserAvatar {
+            background-color: #0072FF;
+            color: white;
+            border-radius: 15px;
+            min-width: 30px; max-width: 30px;
+            min-height: 30px; max-height: 30px;
+            qproperty-alignment: AlignCenter;
+            margin-left: 10px;
+        }
+        #AIAvatar {
+            background-color: #00E5FF;
+            color: #0A0F1C;
+            border-radius: 15px;
+            font-weight: bold;
+            min-width: 30px; max-width: 30px;
+            min-height: 30px; max-height: 30px;
+            qproperty-alignment: AlignCenter;
+            margin-right: 10px;
+        }
+
+        /* 滚动条隐藏化处理 (保留原版) */
+        QScrollArea { border: none; background-color: transparent; }
+        #ScrollContent { background-color: transparent; }
+        QScrollBar:vertical {
+            border: none;
+            background: rgba(255, 255, 255, 0.05);
+            width: 8px; border-radius: 4px;
+        }
+        QScrollBar::handle:vertical {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        /* ==== 底部输入框和新增的开关 ==== */
+        #InputContainer {
+            background-color: rgba(16, 24, 39, 0.9);
+            border-radius: 12px;
+            border: 1px solid rgba(0, 229, 255, 0.3);
+        }
+        #InputBox {
+            background-color: transparent;
+            border: none;
+            color: white;
+            font-size: 15px;
+        }
+
+        #CustomToggle {
+            color: #9CA3AF;
+            font-weight: bold;
+            padding: 5px 10px;
+        }
+        #CustomToggle:hover { color: #E0E7FF; }
+        #CustomToggle:checked { color: #00E5FF; }
+        #CustomToggle::indicator { width: 0px; } /* 隐藏原生勾选框 */
+
+        /* ==== 右侧操作卡片 (原版布局，增加点击效果) ==== */
+        #ActionCard {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(0, 229, 255, 0.1);
+            border-radius: 12px;
+            padding: 15px;
+            text-align: left; /* 保留您原版左对齐的格式 */
+        }
+        #ActionCard:hover {
+            background-color: rgba(0, 229, 255, 0.08);
+            border: 1px solid rgba(0, 229, 255, 0.6);
+        }
+        #ActionCard:pressed {
+            background-color: rgba(0, 229, 255, 0.15);
+            padding-top: 17px; padding-bottom: 13px; /* 点击位移反馈 */
+        }
+        """
+        self.setStyleSheet(qss)
+
+
+if __name__ == "__main__":
     app = QApplication(sys.argv)
-
-    # 可选：加载外部样式表（如果你有改进的 QSS 文件）
-    # try:
-    #     with open('improved_stylesheet.qss', 'r', encoding='utf-8') as f:
-    #         app.setStyleSheet(f.read())
-    # except FileNotFoundError:
-    #     print("样式表文件未找到，使用默认样式")
-
-    window = MainWindow()
+    window = AINexusApp()
     window.show()
-    sys.exit(app.exec_())
-
-
-if __name__ == '__main__':
-    main()
+    sys.exit(app.exec())

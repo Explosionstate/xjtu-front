@@ -1,48 +1,22 @@
-/* ================================
-   深色主题优化版 - DARK_THEME_IMPROVEMENTS
-   改进内容：字体渲染、聚焦反馈、对比度优化
-   ================================ */
-
 :root {
   --bg: #0a0f1c;
   --panel: rgba(16, 24, 39, 0.85);
   --line: rgba(0, 229, 255, 0.25);
   --text: #e0e7ff;
-  --text-bold: #ffffff;        /* ⭐ 新增：用于标题和强调 */
   --muted: #9ca3af;
   --primary: #00e5ff;
   --danger: #ff6b6b;
-
-  /* ⭐ 新增：聚焦和悬停效果 */
-  --focus-shadow: 0 0 0 3px rgba(0, 229, 255, 0.2);
-  --hover-bg: rgba(0, 229, 255, 0.08);
-  --focus-border: 1px solid #00e5ff;
 }
 
 * { box-sizing: border-box; }
 
-/* ========== 文字渲染全局优化 ========== */
 body {
   margin: 0;
   color: var(--text);
   background: radial-gradient(circle at 20% 15%, #12223c, var(--bg));
   font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-
-  /* ⭐ 文字渲染优化 - 关键 */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
 }
 
-/* ========== 标题优化 ========== */
-h1, h2, h3, h4, h5, h6 {
-  color: var(--text-bold);      /* ⭐ 优化：标题改为纯白 */
-  font-weight: 700;
-  letter-spacing: -0.01em;      /* ⭐ 优化：标题微紧 */
-  -webkit-font-smoothing: antialiased;
-}
-
-/* ========== 布局框架 ========== */
 .layout {
   min-height: 100vh;
   display: grid;
@@ -66,8 +40,6 @@ h1, h2, h3, h4, h5, h6 {
 .logo {
   margin: 0 0 12px;
   color: var(--primary);
-  font-weight: 700;        /* ⭐ 优化：字体加粗 */
-  font-size: 18px;
 }
 
 h2, h3 {
@@ -75,13 +47,8 @@ h2, h3 {
   font-weight: 700;
 }
 
-h3 {
-  color: var(--muted);
-  font-size: 14px;
-  letter-spacing: 0.4px;
-}
+h3 { color: var(--muted); font-size: 14px; letter-spacing: 0.4px; }
 
-/* ========== 输入框和按钮 - 优化版 ========== */
 input, select, button {
   border-radius: 8px;
   border: 1px solid var(--line);
@@ -89,18 +56,6 @@ input, select, button {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
   font-size: 13px;
-  font-weight: 500;          /* ⭐ 优化：字体加粗 */
-  font-family: inherit;
-  transition: all 0.2s ease; /* ⭐ 优化：平滑过渡 */
-}
-
-/* ⭐ 优化：输入框聚焦状态 */
-input:focus,
-select:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: var(--focus-shadow);
-  background: var(--hover-bg);
 }
 
 button {
@@ -108,12 +63,6 @@ button {
   background: linear-gradient(90deg, #0072ff, #00e5ff);
   border: none;
   font-weight: 600;
-  transition: all 0.2s ease;
-}
-
-button:hover {
-  opacity: 0.9;
-  box-shadow: 0 4px 12px rgba(0, 114, 255, 0.3);
 }
 
 button.danger {
@@ -125,7 +74,6 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* ========== 行和间距 ========== */
 .row {
   display: flex;
   flex-wrap: wrap;
@@ -140,7 +88,6 @@ button:disabled {
   margin-left: 8px;
   font-size: 12px;
   color: var(--muted);
-  font-weight: 500;          /* ⭐ 优化：字体加粗 */
 }
 
 .row input {
@@ -148,7 +95,6 @@ button:disabled {
   min-width: 120px;
 }
 
-/* ========== 列表样式 ========== */
 .list {
   list-style: none;
   padding: 0;
@@ -162,14 +108,6 @@ button:disabled {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
-  color: var(--text);
-  font-weight: 500;          /* ⭐ 优化：字体加粗 */
-  transition: all 0.2s ease;
-}
-
-.list li:hover {
-  border-color: rgba(0, 229, 255, 0.3);
-  background: var(--hover-bg);
 }
 
 .compact li {
@@ -177,7 +115,6 @@ button:disabled {
   padding: 6px;
 }
 
-/* ========== 网格布局 ========== */
 .grid2 {
   display: grid;
   grid-template-columns: 84px 1fr;
@@ -186,7 +123,6 @@ button:disabled {
   margin-bottom: 8px;
 }
 
-/* ========== 错误提示 ========== */
 .error {
   border: 1px solid rgba(255, 107, 107, 0.5);
   background: rgba(185, 65, 65, 0.2);
@@ -194,10 +130,8 @@ button:disabled {
   border-radius: 8px;
   padding: 8px;
   margin-bottom: 8px;
-  font-weight: 500;          /* ⭐ 优化：字体加粗 */
 }
 
-/* ========== 代码块 ========== */
 pre {
   margin: 6px 0;
   max-height: 240px;
@@ -209,117 +143,10 @@ pre {
   color: #c8f7ff;
   font-size: 12px;
   white-space: pre-wrap;
-  font-family: "Menlo", "Monaco", "Courier New", monospace;
 }
 
-/* ========== 响应式设计 ========== */
 @media (max-width: 1200px) {
   .layout { grid-template-columns: 1fr; }
   .panel { border: none; border-bottom: 1px solid var(--line); }
   .right { border-left: none; }
-}
-
-/* ========== 额外优化：列表项聚焦状态 ========== */
-.list li:focus,
-.list li.active {
-  border-color: var(--primary);
-  background: rgba(0, 229, 255, 0.12);
-  color: #ffffff;
-  box-shadow: 0 0 8px rgba(0, 229, 255, 0.2);
-}
-
-/* ========== 额外优化：段落和链接 ========== */
-p {
-  color: var(--text);
-  line-height: 1.6;
-  font-weight: 400;
-}
-
-a {
-  color: var(--primary);
-  text-decoration: none;
-  transition: all 0.2s ease;
-  border-bottom: 1px solid transparent;
-}
-
-a:hover {
-  border-bottom-color: var(--primary);
-}
-
-/* ========== 额外优化：标题下的描述文字 ========== */
-.description,
-.subtitle {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.5;
-}
-
-/* ========== 额外优化：卡片和面板背景 ========== */
-.card,
-.section {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px;
-  transition: all 0.2s ease;
-}
-
-.card:hover,
-.section:hover {
-  border-color: rgba(0, 229, 255, 0.4);
-  background: rgba(16, 24, 39, 0.95);
-}
-
-/* ========== 额外优化：按钮禁用状态 ========== */
-button:disabled {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--muted);
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-/* ========== 额外优化：输入框占位符 ========== */
-input::placeholder,
-textarea::placeholder,
-select::placeholder {
-  color: rgba(156, 163, 175, 0.6);
-}
-
-/* ========== 额外优化：滚动条（Webkit浏览器） ========== */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgba(0, 229, 255, 0.05);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 229, 255, 0.25);
-  border-radius: 4px;
-  transition: background 0.2s ease;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 229, 255, 0.4);
-}
-
-/* ========== 额外优化：焦点环（可访问性） ========== */
-:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-/* ========== 额外优化：选择文本颜色 ========== */
-::selection {
-  background: rgba(0, 229, 255, 0.3);
-  color: #ffffff;
-}
-
-::-moz-selection {
-  background: rgba(0, 229, 255, 0.3);
-  color: #ffffff;
 }
