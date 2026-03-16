@@ -50,6 +50,14 @@ export interface SourceItem {
   score: number;
 }
 
+export interface ChatThinking {
+  title: string;
+  content: string;
+  kind: string;
+  is_real: boolean;
+  collapsed: boolean;
+}
+
 export interface ChatCompletionResponse {
   id: string;
   object: string;
@@ -61,6 +69,7 @@ export interface ChatCompletionResponse {
     finish_reason: string;
   }>;
   sources: SourceItem[];
+  thinking?: ChatThinking;
 }
 
 export interface ChatLogItem {
