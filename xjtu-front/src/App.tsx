@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import "./App.css";
 
-import { login, ssoExchange } from "./api/auth";
+import { ssoExchange } from "./api/auth";
 import { chatCompletions, retrievalDebug } from "./api/chat";
 import { setSensitiveWords } from "./api/config";
 import { batchDeleteDocuments, listDocuments, uploadDocuments } from "./api/documents";
@@ -29,14 +29,25 @@ const defaultConfig: RetrievalConfig = {
 };
 
 type ChatMessage = { role: "user" | "assistant"; content: string; id: number };
+type UserRole = "admin" | "student" | "teacher" | "unknown";
+
+function normalizeRole(rawRole?: string, rawLoginName?: string): UserRole {
+  const role = (rawRole || "").trim().toLowerCase();
+  if (role === "admin" || role === "student" || role === "teacher") {
+    return role;
+  }
+  const loginRole = (rawLoginName || "").trim().toLowerCase();
+  if (loginRole === "admin" || loginRole === "student" || loginRole === "teacher") {
+    return loginRole;
+  }
+  return "unknown";
+}
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<"ai" | "kbdoc" | "kbops">("ai");
   const [error, setError] = useState("");
   const [tokenReady, setTokenReady] = useState(false);
-
-  const [loginName, setLoginName] = useState("admin");
-  const [password, setPassword] = useState("admin123");
+  const [userRole, setUserRole] = useState<UserRole>("unknown");
 
   const [kbs, setKbs] = useState<KnowledgeBaseItem[]>([]);
   const [kbName, setKbName] = useState("演示知识库");
@@ -61,6 +72,8 @@ export default function App() {
 
   const [sessionConfig, setSessionConfig] = useState<RetrievalConfig>(defaultConfig);
   const canOperateDoc = useMemo(() => Boolean(activeKbId), [activeKbId]);
+  const isRoleLimited = tokenReady && userRole !== "admin";
+  const canAccessAdminViews = !isRoleLimited;
 
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -83,8 +96,6 @@ export default function App() {
     const ticket = params.get("sso_ticket");
     if (!ticket) return;
 
-    // Remove sso_ticket from URL immediately to avoid duplicate exchange
-    // in React StrictMode development double-invocation.
     params.delete("sso_ticket");
     const nextQuery = params.toString();
     const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash}`;
@@ -94,11 +105,16 @@ export default function App() {
       const data = await ssoExchange(ticket);
       setToken(data.access_token);
       setTokenReady(true);
-      setLoginName(data.login_name);
-      setPassword("");
+      setUserRole(normalizeRole(data.role, data.login_name));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (isRoleLimited && currentPage !== "ai") {
+      setCurrentPage("ai");
+    }
+  }, [currentPage, isRoleLimited]);
 
   const handleSendMessage = () => {
     if (!question.trim()) return;
@@ -160,11 +176,13 @@ export default function App() {
     }
   };
 
-  if (currentPage === "kbdoc") {
+  if (currentPage === "kbdoc" && canAccessAdminViews) {
     return (
       <main className="qw-layout" style={{ display: "block", minHeight: "100vh" }}>
         <div style={{ padding: 16 }}>
-          <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("ai")}>返回 AI 主界面</button>
+          <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("ai")}>
+            返回智能体主界面
+          </button>
         </div>
         <KbDocManagePage onError={setError} />
         {error && <div className="qw-toast-error" style={{ margin: "0 16px 16px" }}>{error}</div>}
@@ -172,21 +190,31 @@ export default function App() {
     );
   }
 
-  if (currentPage === "kbops") {
+  if (currentPage === "kbops" && canAccessAdminViews) {
     return <KbUpdateUploadPage onError={setError} onBack={() => setCurrentPage("ai")} />;
   }
 
   return (
-    <main className="qw-layout">
-      {/* ==================== 左侧边栏 ==================== */}
+    <main className={`qw-layout${isRoleLimited ? " qw-layout-limited" : ""}`}>
       <aside className="qw-sidebar">
         <div className="qw-brand">
-          <div className="qw-logo">🌌</div>
-          <span>西交 AI 助手</span>
+          <div className="qw-logo">AI</div>
+          <div className="qw-brand-copy">
+            <strong>西交 AI 智能体</strong>
+            <span>Knowledge & Chatbot</span>
+          </div>
         </div>
 
-        <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("kbdoc")}>专用：知识库编辑/文档上传</button>
-        <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("kbops")}>专用：PUT更新/批量上传</button>
+        {canAccessAdminViews && (
+        <div className="qw-sidebar-actions">
+          <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("kbdoc")}>
+            知识库编辑与文档上传
+          </button>
+          <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("kbops")}>
+            知识库更新与批量上传
+          </button>
+        </div>
+        )}
 
         <button
           className="qw-btn qw-btn-primary qw-new-chat-btn"
@@ -196,51 +224,55 @@ export default function App() {
             setQuestion("");
           }}
         >
-          <span className="plus-icon">+</span> 新建对话
+          <svg className="plus-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          新建会话
         </button>
 
         <div className="qw-history-list">
-          <div className="qw-history-title">会话历史</div>
+          <div className="qw-history-title">近期记录</div>
           <div className="qw-history-item active">
-            💬 当前会话 <span className="qw-session-badge">{conversationId.slice(-6)}</span>
+            <span className="qw-history-name">当前正在进行的会话</span>
+            <span className="qw-session-badge">{conversationId.slice(-6)}</span>
           </div>
-        </div>
-
-        {/* 底部保留登录入口，设计成低调的样式 */}
-        <div className="qw-auth-zone">
-          <div className="qw-auth-inputs">
-            <input value={loginName} onChange={(e) => setLoginName(e.target.value)} placeholder="用户名" />
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="密码" />
-          </div>
-          <button className="qw-btn qw-btn-outline" onClick={() => runSafely(async () => {
-            const data = await login(loginName, password);
-            setToken(data.access_token);
-            setTokenReady(true);
-          })}>
-            {tokenReady ? "已登录 (刷新Token)" : "登录系统"}
-          </button>
+          {/* 这里可以保留之前的静态提示，或者对接真实历史 */}
+          <p className="qw-history-tip">新建会话会清空当前消息上下文。</p>
         </div>
       </aside>
 
-      {/* ==================== 中间主对话区 ==================== */}
       <section className="qw-main-chat">
+        <header className="qw-chat-header">
+          <div>
+            <h1>智能体协作平台</h1>
+          </div>
+          <div className="qw-chat-meta">
+            <span>Session: </span>
+            <code>{conversationId.slice(-8)}</code>
+          </div>
+        </header>
+
         {error && <div className="qw-toast-error">{error}</div>}
 
         <div className="qw-chat-scroll">
           <div className="qw-chat-container">
             {chatHistory.length === 0 ? (
               <div className="qw-empty-state">
-                <div className="qw-greet-icon">✨</div>
-                <h2>你好，我是西交 AI 助手</h2>
-                <p>很高兴遇见你，你可以基于已勾选的知识库向我提问，或者进行检索测试。</p>
+                <h2>👋 你好，我是西交 AI 助手</h2>
+                <p>我可以帮助你进行知识库检索、文档分析，或者提供创意灵感。请尝试提问：</p>
+                <div className="qw-empty-hints">
+                  <span onClick={() => setQuestion("总结本周新增文档的重点结论")}>🚀 示例：总结本周新增文档的重点结论</span>
+                  <span onClick={() => setQuestion("根据知识库解释某个技术概念")}>💡 示例：根据知识库解释某个技术概念</span>
+                </div>
               </div>
             ) : (
               chatHistory.map((msg, idx) => (
-                <div key={idx} className={`qw-msg-row ${msg.role}`}>
+                <div key={idx} className={`qw-msg-row ${msg.role === "assistant" ? "ai" : "user"}`}>
                   {msg.role === "assistant" && <div className="qw-avatar ai">AI</div>}
                   <div className="qw-bubble">
                     {msg.role === "assistant" && msg.content === "" ? (
-                      <span className="qw-typing">思考中...</span>
+                      <span className="qw-typing">AI 正在思考中...</span>
                     ) : (
                       msg.content
                     )}
@@ -253,22 +285,21 @@ export default function App() {
           </div>
         </div>
 
-        {/* 底部输入区 - 悬浮样式 */}
         <div className="qw-input-wrapper">
           <div className="qw-input-toolbar">
             <label className="qw-toggle">
               <input type="checkbox" checked={useQwen} onChange={(e) => setUseQwen(e.target.checked)} />
               <div className="qw-toggle-track"></div>
-              <span>Qwen3.5大模型</span>
+              <span>启用 Qwen3.5 增强</span>
             </label>
             <label className="qw-toggle">
               <input type="checkbox" checked={useStreamWS} onChange={(e) => setUseStreamWS(e.target.checked)} />
               <div className="qw-toggle-track"></div>
-              <span>流式 WebSocket</span>
+              <span>启用 WebSocket 流式</span>
             </label>
             <div className="qw-flex-spacer"></div>
             {useStreamWS && (
-               <button className="qw-btn-text qw-text-danger" onClick={() => socket.disconnect()}>断开WS</button>
+              <button className="qw-btn-text qw-text-danger" onClick={() => socket.disconnect()}>断开 WS</button>
             )}
             <button className="qw-btn-text" disabled={!canOperateDoc} onClick={() => runSafely(async () => {
               const data = await retrievalDebug({
@@ -281,9 +312,9 @@ export default function App() {
                 alpha: sessionConfig.alpha
               });
               setDebugJson(JSON.stringify(data, null, 2));
-              setError("检索调试已完成，请在右侧面板底部查看详情");
+              setError("检索调试已完成，请在右侧面板底部查看结果。");
             })}>
-              🔍 检索调试
+              检索调试
             </button>
           </div>
 
@@ -297,33 +328,33 @@ export default function App() {
                   handleSendMessage();
                 }
               }}
-              placeholder="输入问题，按 Enter 发送，Shift + Enter 换行..."
+              placeholder="请输入问题，Enter 发送，Shift + Enter 换行"
               rows={1}
             />
-            <button className="qw-send-btn" disabled={!question.trim()} onClick={handleSendMessage}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <button className="qw-send-btn" disabled={!question.trim()} onClick={handleSendMessage} aria-label="发送消息">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M2.01 21L23 12L2.01 3L2 10l15 2-15 2z" fill="currentColor"/>
               </svg>
             </button>
           </div>
+          <p className="qw-input-tip">回答会优先参考当前勾选的知识库和文档范围。</p>
         </div>
       </section>
 
-      {/* ==================== 右侧控制台 (高级感折叠面板) ==================== */}
+      {canAccessAdminViews && (
       <aside className="qw-right-panel">
         <div className="qw-right-header">
           <h3>控制台面板</h3>
-          <span className="qw-subtitle">Admin Settings</span>
+          <span className="qw-subtitle">配置知识库与调试参数</span>
         </div>
 
         <div className="qw-right-scroll">
-
-          {/* 1. 知识库管理 */}
           <details className="qw-accordion" open>
-            <summary>📚 知识库管理</summary>
+            <summary>知识库管理</summary>
             <div className="qw-accordion-content">
+              <p className="qw-section-tip">创建、选择并启用知识库参与当前会话。</p>
               <div className="qw-compact-row">
-                <input value={kbName} onChange={(e) => setKbName(e.target.value)} placeholder="新知识库名称" className="qw-flex-1" />
+                <input value={kbName} onChange={(e) => setKbName(e.target.value)} placeholder="输入知识库名称" className="qw-flex-1" />
               </div>
               <div className="qw-btn-group">
                 <button className="qw-btn qw-btn-subtle" disabled={!tokenReady} onClick={() => runSafely(async () => {
@@ -332,16 +363,16 @@ export default function App() {
                   setKbs(result.items);
                   if (!activeKbId && result.items.length) setActiveKbId(result.items[0].id);
                   if (!enabledKbIds.length && result.items.length) setEnabledKbIds([result.items[0].id]);
-                })}>新建KB</button>
+                })}>新建知识库</button>
                 <button className="qw-btn qw-btn-subtle" disabled={!tokenReady} onClick={() => runSafely(async () => {
                   const result = await listKnowledgeBases({ limit: 50 });
                   setKbs(result.items);
-                })}>刷新</button>
+                })}>刷新列表</button>
               </div>
 
               <div className="qw-list-container">
                 {kbs.map((kb) => (
-                  <div key={kb.id} className={`qw-list-item ${activeKbId === kb.id ? 'active' : ''}`}>
+                  <div key={kb.id} className={`qw-list-item ${activeKbId === kb.id ? "active" : ""}`}>
                     <div className="qw-item-main">
                       <label className="qw-radio">
                         <input type="radio" checked={activeKbId === kb.id} onChange={() => setActiveKbId(kb.id)} />
@@ -352,12 +383,12 @@ export default function App() {
                         const result = await listKnowledgeBases({ limit: 50 });
                         setKbs(result.items);
                         if (activeKbId === kb.id) setActiveKbId("");
-                      })}>删</button>
+                      })}>删除</button>
                     </div>
                     <label className="qw-checkbox qw-mt-2">
                       <input type="checkbox" checked={enabledKbIds.includes(kb.id)} onChange={(e) => {
                         setEnabledKbIds((prev) => e.target.checked ? [...new Set([...prev, kb.id])] : prev.filter((id) => id !== kb.id));
-                      }} /> 启用此知识库问答
+                      }} /> 参与当前会话检索
                     </label>
                   </div>
                 ))}
@@ -365,10 +396,10 @@ export default function App() {
             </div>
           </details>
 
-          {/* 2. 文档管理 */}
-          <details className="qw-accordion" open>
-            <summary>📄 文档片段管理</summary>
+          <details className="qw-accordion">
+            <summary>文档片段管理</summary>
             <div className="qw-accordion-content">
+              <p className="qw-section-tip">维护文档数据，按需勾选参与问答检索的文档。</p>
               <div className="qw-btn-group">
                 <input type="file" multiple id="doc-upload" className="qw-hidden" onChange={(e) => {
                   const files = Array.from(e.target.files || []);
@@ -379,51 +410,51 @@ export default function App() {
                     setDocs(result.items);
                   });
                 }} disabled={!canOperateDoc} />
-                <label htmlFor="doc-upload" className={`qw-btn qw-btn-subtle ${!canOperateDoc?'disabled':''}`}>上传文档</label>
+                <label htmlFor="doc-upload" className={`qw-btn qw-btn-subtle ${!canOperateDoc ? "disabled" : ""}`}>上传文档</label>
                 <button className="qw-btn qw-btn-subtle" disabled={!canOperateDoc} onClick={() => runSafely(async () => {
                   const result = await listDocuments(activeKbId);
                   setDocs(result.items);
-                })}>刷新</button>
+                })}>刷新列表</button>
                 <button className="qw-btn qw-btn-subtle qw-text-danger" disabled={!canOperateDoc || selectedDocIds.length === 0} onClick={() => runSafely(async () => {
                   await batchDeleteDocuments(activeKbId, selectedDocIds);
                   const result = await listDocuments(activeKbId);
                   setDocs(result.items);
                   setSelectedDocIds([]);
-                })}>批量删</button>
+                })}>批量删除</button>
               </div>
 
               <div className="qw-list-container">
-                {docs.length === 0 && <div className="qw-empty-text">请先选择或上传文档</div>}
+                {docs.length === 0 && <div className="qw-empty-text">暂无文档，请先上传或刷新列表。</div>}
                 {docs.map((doc) => (
                   <div key={doc.id} className="qw-list-item">
-                     <div className="qw-item-main">
-                        <label className="qw-checkbox">
-                          <input type="checkbox" checked={selectedDocIds.includes(doc.id)} onChange={(e) => {
-                            setSelectedDocIds((prev) => e.target.checked ? [...prev, doc.id] : prev.filter((id) => id !== doc.id));
-                          }} />
-                          <span className="qw-truncate" title={doc.file_name}>{doc.file_name}</span>
-                        </label>
-                        <span className="qw-badge">{doc.chunk_count}段</span>
-                     </div>
-                     <label className="qw-checkbox qw-mt-2">
-                        <input type="checkbox" checked={enabledDocIds.includes(doc.id)} onChange={(e) => {
-                          setEnabledDocIds((prev) => e.target.checked ? [...new Set([...prev, doc.id])] : prev.filter((id) => id !== doc.id));
-                        }} /> 参与检索问答
-                     </label>
+                    <div className="qw-item-main">
+                      <label className="qw-checkbox">
+                        <input type="checkbox" checked={selectedDocIds.includes(doc.id)} onChange={(e) => {
+                          setSelectedDocIds((prev) => e.target.checked ? [...prev, doc.id] : prev.filter((id) => id !== doc.id));
+                        }} />
+                        <span className="qw-truncate" title={doc.file_name}>{doc.file_name}</span>
+                      </label>
+                      <span className="qw-badge">{doc.chunk_count} 段</span>
+                    </div>
+                    <label className="qw-checkbox qw-mt-2">
+                      <input type="checkbox" checked={enabledDocIds.includes(doc.id)} onChange={(e) => {
+                        setEnabledDocIds((prev) => e.target.checked ? [...new Set([...prev, doc.id])] : prev.filter((id) => id !== doc.id));
+                      }} /> 参与检索问答
+                    </label>
                   </div>
                 ))}
               </div>
             </div>
           </details>
 
-          {/* 3. 会话调参 */}
           <details className="qw-accordion">
-            <summary>⚙️ 核心检索调参</summary>
+            <summary>检索参数调优</summary>
             <div className="qw-accordion-content">
+              <p className="qw-section-tip">按会话调整召回策略，便于评估检索效果。</p>
               <div className="qw-grid-form">
                 <span>召回数量</span>
                 <input type="number" value={sessionConfig.retrieval_top_k} onChange={(e) => setSessionConfig({ ...sessionConfig, retrieval_top_k: Number(e.target.value) })} />
-                <span>分数阈值</span>
+                <span>评分阈值</span>
                 <input type="number" step="0.01" value={sessionConfig.score_threshold} onChange={(e) => setSessionConfig({ ...sessionConfig, score_threshold: Number(e.target.value) })} />
                 <span>融合模式</span>
                 <select value={sessionConfig.fusion_mode} onChange={(e) => setSessionConfig({ ...sessionConfig, fusion_mode: e.target.value })}>
@@ -437,7 +468,7 @@ export default function App() {
                 <button className="qw-btn qw-btn-subtle" onClick={() => runSafely(async () => {
                   const data = await getSessionRetrievalConfig(conversationId);
                   setSessionConfig(data);
-                })}>读取</button>
+                })}>读取会话参数</button>
                 <button className="qw-btn qw-btn-primary qw-flex-1" onClick={() => runSafely(async () => {
                   const data = await updateSessionRetrievalConfig(conversationId, sessionConfig);
                   setSessionConfig(data);
@@ -446,16 +477,16 @@ export default function App() {
             </div>
           </details>
 
-          {/* 4. 日志与调试 (底层数据) */}
           <details className="qw-accordion">
-            <summary>🛠 诊断与日志</summary>
+            <summary>诊断与日志</summary>
             <div className="qw-accordion-content">
+              <p className="qw-section-tip">用于查看运行状态、测试敏感词和检索/会话日志。</p>
               <div className="qw-btn-group">
-                 <button className="qw-btn qw-btn-subtle" onClick={() => runSafely(async () => {
+                <button className="qw-btn qw-btn-subtle" onClick={() => runSafely(async () => {
                   const data = await getRuntimeDebug();
                   setRuntimeJson(JSON.stringify(data, null, 2));
-                })}>系统 Runtime</button>
-                <button className="qw-btn qw-btn-subtle" onClick={() => runSafely(async () => setSensitiveWords("违规词,测试词"))}>设敏感词</button>
+                })}>获取 Runtime</button>
+                <button className="qw-btn qw-btn-subtle" onClick={() => runSafely(async () => setSensitiveWords("违规词,测试词"))}>设置敏感词</button>
                 <button className="qw-btn qw-btn-subtle" onClick={() => runSafely(async () => {
                   const data = await listChatLogs({ limit: 20 });
                   setLogs(data.items);
@@ -470,7 +501,7 @@ export default function App() {
 
               {debugJson && (
                 <div className="qw-debug-box">
-                  <div className="qw-debug-title">检索打分 Debug</div>
+                  <div className="qw-debug-title">检索调试结果</div>
                   <pre>{debugJson}</pre>
                 </div>
               )}
@@ -482,9 +513,9 @@ export default function App() {
               )}
             </div>
           </details>
-
         </div>
       </aside>
+      )}
     </main>
   );
 }
