@@ -48,6 +48,18 @@ type ChatMessage = {
 
 type UserRole = "admin" | "student" | "teacher" | "unknown";
 
+type AgentWorkspacePreset = {
+  agentTitle: string;
+  emptyStateTitle: string;
+  emptyStateDesc: string;
+  presetQuestion: string;
+  conversationId: string;
+  useQwen: boolean;
+  useStreamWS: boolean;
+  retrievalConfig: RetrievalConfig;
+  hasRetrievalPreset: boolean;
+};
+
 function createMessageId() {
   return Date.now() + Math.floor(Math.random() * 1000);
 }
@@ -106,7 +118,53 @@ function normalizeRole(rawRole?: string, rawLoginName?: string): UserRole {
   return "unknown";
 }
 
+function parseBoolean(value: string | null, fallback = false): boolean {
+  if (!value) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function parseNumber(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return parsed;
+}
+
+function parseAgentWorkspacePreset(search: string): AgentWorkspacePreset {
+  const params = new URLSearchParams(search);
+  const topK = parseNumber(params.get("retrieval_top_k"));
+  const threshold = parseNumber(params.get("score_threshold"));
+  const alpha = parseNumber(params.get("alpha"));
+  const fusionMode = params.get("fusion_mode");
+
+  const hasRetrievalPreset = topK !== null || threshold !== null || alpha !== null || Boolean(fusionMode);
+
+  return {
+    agentTitle: params.get("agent_title") || "智能体协作平台",
+    emptyStateTitle: params.get("agent_empty_title") || "你好，我是西交 AI 助手",
+    emptyStateDesc:
+      params.get("agent_empty_desc") || "我可以帮助你检索知识库、分析文档，或基于当前资料给出结构化回答。",
+    presetQuestion: params.get("preset_question") || "",
+    conversationId: params.get("conversation_id") || "",
+    useQwen: parseBoolean(params.get("use_qwen"), false),
+    useStreamWS: parseBoolean(params.get("use_ws"), false),
+    retrievalConfig: {
+      retrieval_top_k:
+        topK === null ? defaultConfig.retrieval_top_k : Math.max(1, Math.min(50, Math.round(topK))),
+      score_threshold:
+        threshold === null ? defaultConfig.score_threshold : Math.max(0, Math.min(1, threshold)),
+      fusion_mode: fusionMode || defaultConfig.fusion_mode,
+      alpha: alpha === null ? defaultConfig.alpha : Math.max(0, Math.min(1, alpha))
+    },
+    hasRetrievalPreset
+  };
+}
+
 export default function App() {
+  const agentPreset = useMemo(() => parseAgentWorkspacePreset(window.location.search), []);
   const [currentPage, setCurrentPage] = useState<"ai" | "kbdoc" | "kbops">("ai");
   const [error, setError] = useState("");
   const [tokenReady, setTokenReady] = useState(false);
@@ -121,24 +179,29 @@ export default function App() {
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [enabledDocIds, setEnabledDocIds] = useState<string[]>([]);
 
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(agentPreset.presetQuestion);
   const [debugJson, setDebugJson] = useState("");
-  const [conversationId, setConversationId] = useState(`conv-${Date.now()}`);
+  const [conversationId, setConversationId] = useState(
+    agentPreset.conversationId || `conv-${Date.now()}`
+  );
 
   const [logs, setLogs] = useState<ChatLogItem[]>([]);
   const [runtimeJson, setRuntimeJson] = useState("");
-  const [useQwen, setUseQwen] = useState(false);
-  const [useStreamWS, setUseStreamWS] = useState(false);
+  const [useQwen, setUseQwen] = useState(agentPreset.useQwen);
+  const [useStreamWS, setUseStreamWS] = useState(agentPreset.useStreamWS);
 
-  const [sessionConfig, setSessionConfig] = useState<RetrievalConfig>(defaultConfig);
+  const [sessionConfig, setSessionConfig] = useState<RetrievalConfig>(agentPreset.retrievalConfig);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const thinkingTimerIdsRef = useRef<number[]>([]);
+  const retrievalPresetAppliedRef = useRef(false);
 
   const canOperateDoc = useMemo(() => Boolean(activeKbId), [activeKbId]);
   const isRoleLimited = tokenReady && userRole !== "admin";
   const canAccessAdminViews = !isRoleLimited;
+  const primaryHintText = agentPreset.presetQuestion || "总结本周新增文档的重点内容";
+  const secondaryHintText = "根据知识库解释某个技术概念";
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -181,6 +244,22 @@ export default function App() {
       setCurrentPage("ai");
     }
   }, [currentPage, isRoleLimited]);
+
+  useEffect(() => {
+    if (agentPreset.agentTitle) {
+      document.title = `${agentPreset.agentTitle} - 西交 AI 智能体`;
+    }
+  }, [agentPreset.agentTitle]);
+
+  useEffect(() => {
+    if (!tokenReady || retrievalPresetAppliedRef.current || !agentPreset.hasRetrievalPreset) {
+      return;
+    }
+    runSafely(async () => {
+      await updateSessionRetrievalConfig(conversationId, agentPreset.retrievalConfig);
+      retrievalPresetAppliedRef.current = true;
+    });
+  }, [agentPreset.hasRetrievalPreset, agentPreset.retrievalConfig, conversationId, tokenReady]);
 
   const patchChatMessage = (messageId: number, updater: (message: ChatMessage) => ChatMessage) => {
     setChatHistory((prev) => updateMessageById(prev, messageId, updater));
@@ -442,7 +521,7 @@ export default function App() {
       <section className="qw-main-chat">
         <header className="qw-chat-header">
           <div>
-            <h1>智能体协作平台</h1>
+            <h1>{agentPreset.agentTitle}</h1>
           </div>
           <div className="qw-chat-meta">
             <span>Session: </span>
@@ -456,11 +535,11 @@ export default function App() {
           <div className="qw-chat-container">
             {chatHistory.length === 0 ? (
               <div className="qw-empty-state">
-                <h2>你好，我是西交 AI 助手</h2>
-                <p>我可以帮助你检索知识库、分析文档，或基于当前资料给出结构化回答。</p>
+                <h2>{agentPreset.emptyStateTitle}</h2>
+                <p>{agentPreset.emptyStateDesc}</p>
                 <div className="qw-empty-hints">
-                  <span onClick={() => setQuestion("总结本周新增文档的重点内容")}>示例：总结本周新增文档的重点内容</span>
-                  <span onClick={() => setQuestion("根据知识库解释某个技术概念")}>示例：根据知识库解释某个技术概念</span>
+                  <span onClick={() => setQuestion(primaryHintText)}>示例：{primaryHintText}</span>
+                  <span onClick={() => setQuestion(secondaryHintText)}>示例：{secondaryHintText}</span>
                 </div>
               </div>
             ) : (
