@@ -6,6 +6,10 @@
   --muted: #9ca3af;
   --primary: #00e5ff;
   --danger: #ff6b6b;
+    --text-main: #0f172a;
+  --text-secondary: #1e293b;
+  --text-muted: #475569;
+  --text-hint: #64748b;
 }
 
 * { box-sizing: border-box; }
@@ -15,6 +19,69 @@ body {
   color: var(--text);
   background: radial-gradient(circle at 20% 15%, #12223c, var(--bg));
   font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+.qw-right-panel {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.qw-right-header {
+  flex-shrink: 0;
+  padding: 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.qw-right-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 20px;
+}
+.qw-right-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.qw-right-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.qw-right-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  min-height: 20px;
+}
+
+.qw-right-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+.qw-right-panel h3,
+.qw-right-panel h4 {
+  color: #0f172a;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.qw-right-panel p,
+.qw-right-panel label {
+  color: #1e293b;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.qw-right-panel .qw-section-tip {
+  color: #475569;
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.qw-right-panel input,
+.qw-right-panel select,
+.qw-right-panel textarea {
+  color: #1e293b;
 }
 
 .layout {
