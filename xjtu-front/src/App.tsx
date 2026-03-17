@@ -36,7 +36,7 @@ const defaultConfig: RetrievalConfig = {
   alpha: 0.55
 };
 
-const THINKING_REVEAL_DELAY_MS = 260;
+const THINKING_REVEAL_DELAY_MS = 0;
 
 type AssistantThinkingState = {
   title: string;
@@ -297,7 +297,7 @@ export default function App() {
   const canOperateDoc = useMemo(() => Boolean(activeKbId), [activeKbId]);
   const isRoleLimited = tokenReady && userRole !== "admin";
   const canAccessAdminViews = !isRoleLimited;
-  const canShowAcademic = tokenReady && (userRole === "student" || userRole === "teacher");
+  const canShowAcademic = tokenReady && userRole === "student";
   const classComparison = useMemo(
     () => academicData?.cohort_comparison.find((item) => item.scope_type === "class") || null,
     [academicData]
@@ -543,7 +543,7 @@ export default function App() {
             status: "done"
           }
         }));
-        scheduleMessageUpdate(() => {
+        const commitResponse = () => {
           patchChatMessage(assistantMessageId, (message) => ({
             ...message,
             content: resultText,
@@ -556,7 +556,12 @@ export default function App() {
                 }
               : message.thinking
           }));
-        }, THINKING_REVEAL_DELAY_MS);
+        };
+        if (THINKING_REVEAL_DELAY_MS <= 0) {
+          commitResponse();
+        } else {
+          scheduleMessageUpdate(commitResponse, THINKING_REVEAL_DELAY_MS);
+        }
       } catch (e) {
         markAssistantError(assistantMessageId, (e as Error).message || "请求失败");
         throw e;
@@ -565,6 +570,11 @@ export default function App() {
   };
 
   const loadAcademicAnalysis = (termCode?: string) => {
+    if (!tokenReady || userRole !== "student") {
+      setAcademicData(null);
+      setError("仅学生可使用学业分析功能");
+      return;
+    }
     runSafely(async () => {
       setAcademicLoading(true);
       try {
