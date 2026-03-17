@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import { getMyAcademicAnalysis } from "./api/academic";
 
 import { ssoExchange } from "./api/auth";
 import { chatCompletions, retrievalDebug } from "./api/chat";
@@ -13,7 +14,14 @@ import {
   type RetrievalConfig
 } from "./api/retrievalConfig";
 import { getRuntimeDebug } from "./api/runtime";
-import type { ChatLogItem, ChatThinking as ApiChatThinking, DocumentItem, KnowledgeBaseItem } from "./types/api";
+import type {
+  AcademicAnalysisResponse,
+  AcademicCohortComparisonItem,
+  ChatLogItem,
+  ChatThinking as ApiChatThinking,
+  DocumentItem,
+  KnowledgeBaseItem
+} from "./types/api";
 import { setToken } from "./utils/auth";
 import { ChatSocket } from "./utils/chatSocket";
 import KbDocManagePage from "./pages/KbDocManagePage";
@@ -133,6 +141,56 @@ function parseNumber(value: string | null): number | null {
   return parsed;
 }
 
+function formatNumber(value: unknown, digits = 2): string {
+  if (value === null || value === undefined) return "--";
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return "--";
+  return parsed.toFixed(digits);
+}
+
+function formatPercent(value: unknown): string {
+  const text = formatNumber(value, 2);
+  return text === "--" ? text : `${text}%`;
+}
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function riskClassName(risk: string | undefined): string {
+  const normalized = (risk || "").toLowerCase();
+  if (normalized === "critical") return "critical";
+  if (normalized === "high") return "high";
+  if (normalized === "medium") return "medium";
+  if (normalized === "low") return "low";
+  return "unknown";
+}
+
+function warningClassName(level: string | undefined): string {
+  const normalized = (level || "").toLowerCase();
+  if (normalized === "critical") return "critical";
+  if (normalized === "high") return "high";
+  if (normalized === "medium") return "medium";
+  if (normalized === "low") return "low";
+  return "unknown";
+}
+
+function scopeLabel(scopeType: string): string {
+  switch (scopeType) {
+    case "class":
+      return "同班";
+    case "major":
+      return "同专业";
+    case "college":
+      return "同学院";
+    default:
+      return scopeType;
+  }
+}
+
 function parseAgentWorkspacePreset(search: string): AgentWorkspacePreset {
   const params = new URLSearchParams(search);
   const topK = parseNumber(params.get("retrieval_top_k"));
@@ -192,6 +250,9 @@ export default function App() {
 
   const [sessionConfig, setSessionConfig] = useState<RetrievalConfig>(agentPreset.retrievalConfig);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [academicData, setAcademicData] = useState<AcademicAnalysisResponse | null>(null);
+  const [academicLoading, setAcademicLoading] = useState(false);
+  const [academicExpanded, setAcademicExpanded] = useState(true);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const thinkingTimerIdsRef = useRef<number[]>([]);
@@ -200,6 +261,11 @@ export default function App() {
   const canOperateDoc = useMemo(() => Boolean(activeKbId), [activeKbId]);
   const isRoleLimited = tokenReady && userRole !== "admin";
   const canAccessAdminViews = !isRoleLimited;
+  const canShowAcademic = tokenReady && (userRole === "student" || userRole === "teacher");
+  const classComparison = useMemo(
+    () => academicData?.cohort_comparison.find((item) => item.scope_type === "class") || null,
+    [academicData]
+  );
   const primaryHintText = agentPreset.presetQuestion || "总结本周新增文档的重点内容";
   const secondaryHintText = "根据知识库解释某个技术概念";
 
@@ -443,6 +509,33 @@ export default function App() {
     });
   };
 
+  const loadAcademicAnalysis = (termCode?: string) => {
+    runSafely(async () => {
+      setAcademicLoading(true);
+      try {
+        const data = await getMyAcademicAnalysis(termCode);
+        setAcademicData(data);
+      } finally {
+        setAcademicLoading(false);
+      }
+    });
+  };
+
+  const renderComparisonItem = (item: AcademicCohortComparisonItem) => (
+    <div className="qw-academic-compare-item" key={`${item.scope_type}-${item.scope_id}`}>
+      <div className="qw-academic-compare-title">
+        <strong>{scopeLabel(item.scope_type)}</strong>
+        <span>{item.scope_name}</span>
+      </div>
+      <div className="qw-academic-compare-metrics">
+        <span>样本: {item.sample_size}</span>
+        <span>均分: {formatNumber(item.avg_score)}</span>
+        <span>GPA: {formatNumber(item.avg_gpa)}</span>
+        <span>通过率: {formatPercent(item.pass_rate)}</span>
+      </div>
+    </div>
+  );
+
   if (currentPage === "kbdoc" && canAccessAdminViews) {
     return (
       <main className="qw-layout" style={{ display: "block", minHeight: "100vh" }}>
@@ -530,6 +623,186 @@ export default function App() {
         </header>
 
         {error && <div className="qw-toast-error">{error}</div>}
+
+        {canShowAcademic && (
+          <section className="qw-academic-panel">
+            <div className="qw-academic-toolbar">
+              <div className="qw-btn-group">
+                <button
+                  className="qw-btn qw-btn-subtle"
+                  onClick={() => loadAcademicAnalysis()}
+                  disabled={academicLoading}
+                >
+                  {academicLoading ? "学业分析加载中..." : "获取学业分析"}
+                </button>
+                {academicData && (
+                  <button
+                    className="qw-btn qw-btn-subtle"
+                    onClick={() => setAcademicExpanded((prev) => !prev)}
+                  >
+                    {academicExpanded ? "收起分析卡片" : "展开分析卡片"}
+                  </button>
+                )}
+              </div>
+              {academicData && (
+                <div className="qw-academic-toolbar-meta">
+                  <span>{academicData.student.student_name}（{academicData.student.login_name}）</span>
+                  <span>{academicData.term.term_name}</span>
+                  <span>生成时间：{formatDateTime(academicData.generated_at)}</span>
+                </div>
+              )}
+            </div>
+
+            {academicData && academicExpanded && (
+              <div className="qw-academic-content">
+                <div className="qw-academic-grid">
+                  <article className="qw-academic-card">
+                    <h3>学生概况</h3>
+                    <div className="qw-academic-list">
+                      <div>学号：{academicData.student.student_no || "--"}</div>
+                      <div>学院：{academicData.student.college_name || "--"}</div>
+                      <div>专业：{academicData.student.major_name || "--"}</div>
+                      <div>班级：{academicData.student.class_name || "--"}</div>
+                      <div>年级：{academicData.student.grade_year || "--"}</div>
+                    </div>
+                  </article>
+
+                  <article className="qw-academic-card">
+                    <h3>学业指标概览</h3>
+                    <div className="qw-academic-list">
+                      <div>当前均分：{formatNumber(academicData.metrics.avg_score)}</div>
+                      <div>当前 GPA：{formatNumber(academicData.metrics.gpa)}</div>
+                      <div>累计均分：{formatNumber(academicData.metrics.cumulative_avg_score)}</div>
+                      <div>累计 GPA：{formatNumber(academicData.metrics.cumulative_gpa)}</div>
+                      <div>已修学分：{formatNumber(academicData.metrics.total_credits)}</div>
+                      <div>通过学分：{formatNumber(academicData.metrics.passed_credits)}</div>
+                      <div>不及格门数：{academicData.metrics.failed_course_count ?? "--"}</div>
+                    </div>
+                    <div className="qw-academic-tags">
+                      <span className={`qw-risk-pill ${riskClassName(academicData.risk_level)}`}>
+                        风险等级：{academicData.risk_level || "--"}
+                      </span>
+                      <span className={`qw-risk-pill ${riskClassName(academicData.metrics.portrait_risk_level || undefined)}`}>
+                        画像风险：{academicData.metrics.portrait_risk_level || "--"}
+                      </span>
+                    </div>
+                  </article>
+
+                  <article className="qw-academic-card">
+                    <h3>同维度对比</h3>
+                    {academicData.cohort_comparison.length > 0 ? (
+                      <div className="qw-academic-compare">
+                        {academicData.cohort_comparison.map((item) => renderComparisonItem(item))}
+                      </div>
+                    ) : (
+                      <div className="qw-empty-text">暂无同班/同专业/同学院聚合对比数据。</div>
+                    )}
+                    {classComparison && (
+                      <p className="qw-section-tip qw-academic-inline-tip">
+                        同班样本数 {classComparison.sample_size}，均分 {formatNumber(classComparison.avg_score)}，
+                        GPA {formatNumber(classComparison.avg_gpa)}，通过率 {formatPercent(classComparison.pass_rate)}。
+                      </p>
+                    )}
+                  </article>
+
+                  <article className="qw-academic-card">
+                    <h3>成绩趋势</h3>
+                    {academicData.trend.length > 0 ? (
+                      <div className="qw-academic-trend">
+                        {academicData.trend.map((point) => (
+                          <div className="qw-academic-trend-item" key={point.term_code}>
+                            <div className="qw-academic-trend-head">
+                              <span>{point.term_name}</span>
+                              <span>均分 {formatNumber(point.avg_score)}</span>
+                              <span>GPA {formatNumber(point.gpa)}</span>
+                            </div>
+                            <div className="qw-academic-trend-bar">
+                              <div
+                                style={{
+                                  width: `${Math.max(0, Math.min(100, Number(point.avg_score) || 0))}%`
+                                }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="qw-empty-text">暂无趋势数据。</div>
+                    )}
+                  </article>
+
+                  <article className="qw-academic-card">
+                    <h3>学业预警</h3>
+                    {academicData.warnings.length > 0 ? (
+                      <div className="qw-academic-warning-list">
+                        {academicData.warnings.map((warning) => (
+                          <div className="qw-academic-warning-item" key={warning.warning_id}>
+                            <div className="qw-academic-warning-head">
+                              <strong>{warning.warning_type}</strong>
+                              <span className={`qw-warning-tag ${warningClassName(warning.warning_level)}`}>
+                                {warning.warning_level}
+                              </span>
+                            </div>
+                            <div className="qw-academic-warning-meta">
+                              <span>风险分：{formatNumber(warning.risk_score)}</span>
+                              <span>状态：{warning.status}</span>
+                              <span>触发时间：{formatDateTime(warning.opened_at)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="qw-empty-text">当前暂无学业预警。</div>
+                    )}
+                  </article>
+
+                  <article className="qw-academic-card">
+                    <h3>个性化建议</h3>
+                    {academicData.recommendations.length > 0 ? (
+                      <ul className="qw-academic-list qw-academic-bullets">
+                        {academicData.recommendations.map((item, idx) => <li key={`${item}-${idx}`}>{item}</li>)}
+                      </ul>
+                    ) : (
+                      <div className="qw-empty-text">暂无建议结果。</div>
+                    )}
+                    <h4 className="qw-academic-subtitle">关键发现</h4>
+                    {academicData.key_findings.length > 0 ? (
+                      <ul className="qw-academic-list qw-academic-bullets">
+                        {academicData.key_findings.map((item, idx) => <li key={`${item}-${idx}`}>{item}</li>)}
+                      </ul>
+                    ) : (
+                      <div className="qw-empty-text">暂无关键发现。</div>
+                    )}
+                  </article>
+                </div>
+
+                <article className="qw-academic-card qw-academic-card-full">
+                  <h3>课程成绩明细（当前学期）</h3>
+                  {academicData.course_scores.length > 0 ? (
+                    <div className="qw-academic-score-list">
+                      {academicData.course_scores.map((course) => (
+                        <div className="qw-academic-score-item" key={`${course.course_id}-${course.course_name}`}>
+                          <div className="qw-academic-score-main">
+                            <strong>{course.course_name}</strong>
+                            <span>分数：{formatNumber(course.final_score)}</span>
+                            <span>GPA：{formatNumber(course.gpa_point)}</span>
+                          </div>
+                          <div className="qw-academic-score-meta">
+                            <span>班级排名：{course.rank_in_class ?? "--"}</span>
+                            <span>专业排名：{course.rank_in_major ?? "--"}</span>
+                            <span>{course.is_passed ? "已通过" : "未通过"}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="qw-empty-text">当前学期暂无课程成绩数据。</div>
+                  )}
+                </article>
+              </div>
+            )}
+          </section>
+        )}
 
         <div className="qw-chat-scroll">
           <div className="qw-chat-container">
@@ -622,6 +895,15 @@ export default function App() {
             >
               检索调试
             </button>
+            {canShowAcademic && (
+              <button
+                className="qw-btn-text"
+                onClick={() => loadAcademicAnalysis()}
+                disabled={academicLoading}
+              >
+                {academicLoading ? "学业分析中..." : "学业分析"}
+              </button>
+            )}
           </div>
 
           <div className="qw-input-box">

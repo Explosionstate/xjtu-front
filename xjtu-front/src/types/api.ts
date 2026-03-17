@@ -20,6 +20,101 @@ export interface UserItem {
   department_name: string;
 }
 
+export interface AcademicStudentProfile {
+  student_id: number;
+  login_name: string;
+  student_no?: string | null;
+  student_name: string;
+  college_id?: number | null;
+  college_name?: string | null;
+  major_id?: number | null;
+  major_name?: string | null;
+  class_id?: number | null;
+  class_name?: string | null;
+  grade_year?: number | null;
+}
+
+export interface AcademicTermInfo {
+  term_id: number;
+  term_code: string;
+  term_name: string;
+  academic_year?: number | null;
+  term_no?: number | null;
+}
+
+export interface AcademicMetricSnapshot {
+  avg_score?: number | null;
+  gpa?: number | null;
+  total_credits?: number | null;
+  passed_credits?: number | null;
+  class_rank?: number | null;
+  major_rank?: number | null;
+  college_rank?: number | null;
+  cohort_size?: number | null;
+  cumulative_avg_score?: number | null;
+  cumulative_gpa?: number | null;
+  cumulative_total_credits?: number | null;
+  cumulative_passed_credits?: number | null;
+  failed_course_count?: number | null;
+  portrait_risk_level?: string | null;
+}
+
+export interface AcademicTrendPoint {
+  term_id: number;
+  term_code: string;
+  term_name: string;
+  avg_score?: number | null;
+  gpa?: number | null;
+  class_rank?: number | null;
+  major_rank?: number | null;
+}
+
+export interface AcademicCourseScoreItem {
+  course_id: number;
+  course_name: string;
+  final_score: number;
+  gpa_point?: number | null;
+  rank_in_class?: number | null;
+  rank_in_major?: number | null;
+  is_passed: boolean;
+}
+
+export interface AcademicCohortComparisonItem {
+  scope_type: string;
+  scope_id: number;
+  scope_name: string;
+  sample_size: number;
+  avg_score?: number | null;
+  avg_gpa?: number | null;
+  pass_rate?: number | null;
+  excellent_rate?: number | null;
+  failure_rate?: number | null;
+}
+
+export interface AcademicWarningItem {
+  warning_id: number;
+  warning_type: string;
+  warning_level: string;
+  risk_score: number;
+  status: string;
+  opened_at: string;
+  resolved_at?: string | null;
+}
+
+export interface AcademicAnalysisResponse {
+  student: AcademicStudentProfile;
+  term: AcademicTermInfo;
+  metrics: AcademicMetricSnapshot;
+  trend: AcademicTrendPoint[];
+  course_scores: AcademicCourseScoreItem[];
+  cohort_comparison: AcademicCohortComparisonItem[];
+  warnings: AcademicWarningItem[];
+  risk_level: string;
+  key_findings: string[];
+  recommendations: string[];
+  generated_at: string;
+}
+
 export interface KnowledgeBaseItem {
   id: string;
   name: string;
