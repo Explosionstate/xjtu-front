@@ -3,6 +3,7 @@ import type { ChatCompletionResponse } from "../types/api";
 
 export async function chatCompletions(payload: {
   conversation_id?: string;
+  agent_key?: string;
   kb_ids?: string[];
   document_ids?: string[];
   llm_enabled?: boolean;

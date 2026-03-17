@@ -30,10 +30,10 @@ import KbUpdateUploadPage from "./pages/KbUpdateUploadPage";
 const socket = new ChatSocket();
 
 const defaultConfig: RetrievalConfig = {
-  retrieval_top_k: 8,
-  score_threshold: 0.15,
+  retrieval_top_k: 4,
+  score_threshold: 0.25,
   fusion_mode: "weighted",
-  alpha: 0.6
+  alpha: 0.55
 };
 
 const THINKING_REVEAL_DELAY_MS = 260;
@@ -57,6 +57,8 @@ type ChatMessage = {
 type UserRole = "admin" | "student" | "teacher" | "unknown";
 
 type AgentWorkspacePreset = {
+  agentKey: string;
+  entry: string;
   agentTitle: string;
   emptyStateTitle: string;
   emptyStateDesc: string;
@@ -67,6 +69,8 @@ type AgentWorkspacePreset = {
   retrievalConfig: RetrievalConfig;
   hasRetrievalPreset: boolean;
 };
+
+const RETRIEVAL_LOCAL_KEY_PREFIX = "xjtu_retrieval_preset";
 
 function createMessageId() {
   return Date.now() + Math.floor(Math.random() * 1000);
@@ -201,6 +205,8 @@ function parseAgentWorkspacePreset(search: string): AgentWorkspacePreset {
   const hasRetrievalPreset = topK !== null || threshold !== null || alpha !== null || Boolean(fusionMode);
 
   return {
+    agentKey: params.get("agent_key") || "",
+    entry: params.get("entry") || "",
     agentTitle: params.get("agent_title") || "智能体协作平台",
     emptyStateTitle: params.get("agent_empty_title") || "你好，我是西交 AI 助手",
     emptyStateDesc:
@@ -219,6 +225,32 @@ function parseAgentWorkspacePreset(search: string): AgentWorkspacePreset {
     },
     hasRetrievalPreset
   };
+}
+
+function buildRetrievalLocalKey(role: UserRole, scope: string): string {
+  const safeScope = (scope || "default").trim() || "default";
+  return `${RETRIEVAL_LOCAL_KEY_PREFIX}:${role}:${safeScope}`;
+}
+
+function loadLocalRetrievalConfig(role: UserRole, scope: string): RetrievalConfig | null {
+  try {
+    const raw = localStorage.getItem(buildRetrievalLocalKey(role, scope));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<RetrievalConfig>;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      retrieval_top_k: Math.max(1, Math.min(50, Number(parsed.retrieval_top_k || defaultConfig.retrieval_top_k))),
+      score_threshold: Math.max(0, Math.min(1, Number(parsed.score_threshold || defaultConfig.score_threshold))),
+      fusion_mode: typeof parsed.fusion_mode === "string" ? parsed.fusion_mode : defaultConfig.fusion_mode,
+      alpha: Math.max(0, Math.min(1, Number(parsed.alpha || defaultConfig.alpha)))
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalRetrievalConfig(role: UserRole, scope: string, config: RetrievalConfig): void {
+  localStorage.setItem(buildRetrievalLocalKey(role, scope), JSON.stringify(config));
 }
 
 export default function App() {
@@ -257,6 +289,10 @@ export default function App() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const thinkingTimerIdsRef = useRef<number[]>([]);
   const retrievalPresetAppliedRef = useRef(false);
+  const retrievalScope = useMemo(
+    () => agentPreset.agentKey || agentPreset.entry || "default",
+    [agentPreset.agentKey, agentPreset.entry]
+  );
 
   const canOperateDoc = useMemo(() => Boolean(activeKbId), [activeKbId]);
   const isRoleLimited = tokenReady && userRole !== "admin";
@@ -318,14 +354,31 @@ export default function App() {
   }, [agentPreset.agentTitle]);
 
   useEffect(() => {
-    if (!tokenReady || retrievalPresetAppliedRef.current || !agentPreset.hasRetrievalPreset) {
-      return;
-    }
+    if (!tokenReady) return;
     runSafely(async () => {
-      await updateSessionRetrievalConfig(conversationId, agentPreset.retrievalConfig);
-      retrievalPresetAppliedRef.current = true;
+      const localSaved = loadLocalRetrievalConfig(userRole, retrievalScope);
+      if (localSaved) {
+        setSessionConfig(localSaved);
+        await updateSessionRetrievalConfig(conversationId, localSaved);
+        return;
+      }
+      if (!retrievalPresetAppliedRef.current && agentPreset.hasRetrievalPreset) {
+        await updateSessionRetrievalConfig(conversationId, agentPreset.retrievalConfig);
+        setSessionConfig(agentPreset.retrievalConfig);
+        retrievalPresetAppliedRef.current = true;
+        return;
+      }
+      const serverConfig = await getSessionRetrievalConfig(conversationId);
+      setSessionConfig(serverConfig);
     });
-  }, [agentPreset.hasRetrievalPreset, agentPreset.retrievalConfig, conversationId, tokenReady]);
+  }, [
+    tokenReady,
+    userRole,
+    retrievalScope,
+    agentPreset.hasRetrievalPreset,
+    agentPreset.retrievalConfig,
+    conversationId
+  ]);
 
   const patchChatMessage = (messageId: number, updater: (message: ChatMessage) => ChatMessage) => {
     setChatHistory((prev) => updateMessageById(prev, messageId, updater));
@@ -452,11 +505,12 @@ export default function App() {
 
       runSafely(async () => {
         try {
-          socket.send({
-            conversation_id: conversationId,
-            kb_ids: enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : undefined,
-            document_ids: enabledDocIds,
-            llm_enabled: useQwen,
+            socket.send({
+              conversation_id: conversationId,
+              agent_key: agentPreset.agentKey || undefined,
+              kb_ids: enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : undefined,
+              document_ids: enabledDocIds,
+              llm_enabled: useQwen,
             messages: [{ role: "user", content: currentQuestion }]
           });
         } catch (e) {
@@ -470,6 +524,7 @@ export default function App() {
     runSafely(async () => {
       try {
         const data = await chatCompletions({
+          agent_key: agentPreset.agentKey || undefined,
           kb_ids: enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : undefined,
           document_ids: enabledDocIds,
           llm_enabled: useQwen,
@@ -1163,6 +1218,7 @@ export default function App() {
                     onClick={() => runSafely(async () => {
                       const data = await updateSessionRetrievalConfig(conversationId, sessionConfig);
                       setSessionConfig(data);
+                      saveLocalRetrievalConfig(userRole, retrievalScope, data);
                     })}
                   >
                     应用当前参数
