@@ -7,10 +7,10 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout,
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont, QColor
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect
+from PyQt6.QtWidgets import QScrollArea
 
 
 class NeonButton(QPushButton):
-    """自定义带霓虹发光效果的按钮（保留原版逻辑，样式中增加反馈）"""
 
     def __init__(self, text, is_primary=False):
         super().__init__(text)
@@ -57,8 +57,6 @@ class AINexusApp(QMainWindow):
 
         self.init_ui()
         self.apply_styles()
-
-        # 默认选中第一个历史记录 (保留原版打开就有消息的状态)
         first_item = self.history_list.item(0)
         if first_item:
             self.history_list.setCurrentItem(first_item)
@@ -72,7 +70,6 @@ class AINexusApp(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # ================= 1. 构建左侧边栏 (Sidebar) =================
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
         sidebar.setFixedWidth(260)
@@ -83,7 +80,6 @@ class AINexusApp(QMainWindow):
         logo_label = QLabel("🌌 Nexus AIPrime")
         logo_label.setObjectName("LogoText")
 
-        # 新建聊天按钮 (保留原版文案)
         new_chat_btn = NeonButton("+  New Chat", is_primary=True)
         new_chat_btn.setFixedHeight(45)
         new_chat_btn.clicked.connect(self.start_new_chat)
@@ -91,12 +87,10 @@ class AINexusApp(QMainWindow):
         history_label = QLabel("Recent Chats")
         history_label.setObjectName("SectionTitle")
 
-        # 历史记录列表 (升级为 QListWidget 以支持选中和切换功能)
         self.history_list = QListWidget()
         self.history_list.setObjectName("HistoryList")
         self.history_list.itemClicked.connect(self.switch_chat_session)
 
-        # 加载原版的历史记录列表
         for session_id, data in self.chat_history_data.items():
             item = QListWidgetItem(data["title"])
             item.setData(Qt.ItemDataRole.UserRole, session_id)
@@ -107,7 +101,6 @@ class AINexusApp(QMainWindow):
         sidebar_layout.addWidget(history_label)
         sidebar_layout.addWidget(self.history_list)
 
-        # ================= 2. 构建中间聊天区 (Chat Area) =================
         chat_area = QFrame()
         chat_area.setObjectName("ChatArea")
         chat_layout = QVBoxLayout(chat_area)
@@ -127,7 +120,6 @@ class AINexusApp(QMainWindow):
         self.scroll_layout.setSpacing(15)  # 调整气泡间距
         self.scroll_area.setWidget(self.scroll_content)
 
-        # --- 新增功能：通义千问风格的选项开关 ---
         options_layout = QHBoxLayout()
         options_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
@@ -141,8 +133,6 @@ class AINexusApp(QMainWindow):
 
         options_layout.addWidget(self.search_toggle)
         options_layout.addWidget(self.think_toggle)
-
-        # 底部输入框 (保留原版结构)
         input_container = QFrame()
         input_container.setObjectName("InputContainer")
         input_layout = QHBoxLayout(input_container)
@@ -160,26 +150,25 @@ class AINexusApp(QMainWindow):
         input_layout.addWidget(self.input_box)
         input_layout.addWidget(send_btn)
 
-        # 组装聊天区
         chat_layout.addWidget(self.chat_header)
         chat_layout.addWidget(self.scroll_area)
-        chat_layout.addLayout(options_layout)  # 插入开关
+        chat_layout.addLayout(options_layout)
         chat_layout.addWidget(input_container)
-
-        # ================= 3. 构建右侧功能区 (Right Panel) =================
         right_panel = QFrame()
         right_panel.setObjectName("RightPanel")
         right_panel.setFixedWidth(320)
         right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(20, 30, 20, 30)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
 
-        welcome_label = QLabel("Welcome to AI")
-        welcome_label.setObjectName("SectionTitle")
+        right_header = QFrame()
+        right_header.setObjectName("RightPanelHeader")
+        right_header_layout = QVBoxLayout(right_header)
+        right_header_layout.setContentsMargins(20, 30, 20, 20)
 
         grid_layout = QGridLayout()
         grid_layout.setSpacing(15)
 
-        # 完全保留原版的卡片文案
         cards = [
             ("📝", "Draft Blog Post"),
             ("🐍", "Write Python Code"),
@@ -188,7 +177,6 @@ class AINexusApp(QMainWindow):
         ]
 
         for i, (icon, text) in enumerate(cards):
-            # 升级为可点击带有反馈的卡片，但保留原版的内部排版布局
             card = QPushButton()
             card.setObjectName("ActionCard")
             card.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -199,7 +187,6 @@ class AINexusApp(QMainWindow):
             card_text.setWordWrap(True)
             card_layout.addWidget(card_text)
 
-            # 点击卡片填入输入框功能
             card.clicked.connect(lambda checked, t=text: self.input_box.setText(f"Help me {t.lower()}..."))
             grid_layout.addWidget(card, i // 2, i % 2)
 
@@ -213,7 +200,6 @@ class AINexusApp(QMainWindow):
         main_layout.addWidget(right_panel)
 
     def start_new_chat(self):
-        """新建会话功能"""
         session_id = str(uuid.uuid4())
         title = "New Chat"
         self.chat_history_data[session_id] = {"title": title, "messages": []}
@@ -225,50 +211,41 @@ class AINexusApp(QMainWindow):
         self.switch_chat_session(item)
 
     def switch_chat_session(self, item):
-        """切换左侧历史记录时，加载对应聊天记录"""
         session_id = item.data(Qt.ItemDataRole.UserRole)
         self.current_session_id = session_id
         session_data = self.chat_history_data[session_id]
 
         self.chat_header.setText(session_data["title"])
 
-        # 清理当前屏幕的消息
         while self.scroll_layout.count():
             child = self.scroll_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-        # 加载历史消息
         for role, text in session_data["messages"]:
             self.scroll_layout.addWidget(self.create_message_bubble(text, role == "user"))
 
         QTimer.singleShot(50, self.scroll_to_bottom)
 
     def send_message(self):
-        """发送消息逻辑"""
         text = self.input_box.text().strip()
         if not text or not self.current_session_id:
             return
 
-        # 获取开关状态
         is_search = self.search_toggle.isChecked()
         is_think = self.think_toggle.isChecked()
 
         self.input_box.clear()
 
-        # 1. 渲染用户消息
         self.chat_history_data[self.current_session_id]["messages"].append(("user", text))
         self.scroll_layout.addWidget(self.create_message_bubble(text, is_user=True))
         self.scroll_to_bottom()
-
-        # 如果是新会话的第一句话，更新标题
         if len(self.chat_history_data[self.current_session_id]["messages"]) == 1:
             title = text[:15] + "..." if len(text) > 15 else text
             self.chat_history_data[self.current_session_id]["title"] = title
             self.history_list.currentItem().setText(title)
             self.chat_header.setText(title)
 
-        # 2. 模拟 AI 回复
         QTimer.singleShot(600, lambda: self.simulate_ai_response(text, is_search, is_think))
 
     def simulate_ai_response(self, text, is_search, is_think):
@@ -284,7 +261,6 @@ class AINexusApp(QMainWindow):
         self.scroll_to_bottom()
 
     def create_message_bubble(self, text, is_user=False):
-        """完全基于您原有的函数改造：保留阴影特效，升级为通义千问布局格式"""
         container = QFrame()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 10, 0, 10)
@@ -293,34 +269,30 @@ class AINexusApp(QMainWindow):
         bubble.setWordWrap(True)
         bubble.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         bubble.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        bubble.setMaximumWidth(700)  # 防止文字太长撑满屏幕
+        bubble.setMaximumWidth(700)
 
         if is_user:
             bubble.setObjectName("UserBubble")
-            layout.addStretch()  # 左侧添加弹簧，把气泡推到右边
+            layout.addStretch()
             layout.addWidget(bubble)
 
-            # 加入用户头像标识
             avatar = QLabel("U")
             avatar.setObjectName("UserAvatar")
             layout.addWidget(avatar, alignment=Qt.AlignmentFlag.AlignTop)
         else:
             bubble.setObjectName("AIBubble")
 
-            # 加入 AI 头像标识
             avatar = QLabel("AI")
             avatar.setObjectName("AIAvatar")
             layout.addWidget(avatar, alignment=Qt.AlignmentFlag.AlignTop)
             layout.addWidget(bubble)
-
-            # 保留您原本设计的 AI 消息发光阴影效果
             shadow = QGraphicsDropShadowEffect()
             shadow.setBlurRadius(15)
             shadow.setColor(QColor(0, 229, 255, 60))
             shadow.setOffset(0, 0)
             bubble.setGraphicsEffect(shadow)
 
-            layout.addStretch()  # 右侧添加弹簧，把气泡推到左边
+            layout.addStretch()
 
         return container
 
@@ -329,7 +301,6 @@ class AINexusApp(QMainWindow):
         scrollbar.setValue(scrollbar.maximum())
 
     def apply_styles(self):
-        """全局样式：保留原风格，追加交互反馈和气泡颜色"""
         qss = """
         /* 全局深色背景设定 (完全保留) */
         QWidget {
@@ -500,7 +471,6 @@ class AINexusApp(QMainWindow):
         }
         """
         self.setStyleSheet(qss)
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
