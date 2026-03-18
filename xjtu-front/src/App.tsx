@@ -320,11 +320,13 @@ export default function App() {
     const content = latestAssistantThinking?.content || "";
     const match = content.match(/profile_ms=(\d+)[，,]\s*retrieval_ms=(\d+)[，,]\s*llm_ms=(\d+)[，,]\s*total_ms=(\d+)/);
     if (!match) return null;
+    const workflowMatch = content.match(/workflow_wait_ms=(\d+)/);
     return {
       profile_ms: Number(match[1]),
       retrieval_ms: Number(match[2]),
       llm_ms: Number(match[3]),
-      total_ms: Number(match[4])
+      total_ms: Number(match[4]),
+      workflow_wait_ms: workflowMatch ? Number(workflowMatch[1]) : 0
     };
   }, [latestAssistantThinking]);
   const primaryHintText = agentPreset.presetQuestion || "总结本周新增文档的重点内容";
@@ -1069,6 +1071,8 @@ export default function App() {
                     <strong>{latestTimingSummary.llm_ms}</strong>
                     <span>total_ms</span>
                     <strong>{latestTimingSummary.total_ms}</strong>
+                    <span>workflow_wait_ms</span>
+                    <strong>{latestTimingSummary.workflow_wait_ms}</strong>
                   </div>
                 ) : (
                   <div className="qw-empty-text">暂无耗时数据，请先发起一次问答。</div>
