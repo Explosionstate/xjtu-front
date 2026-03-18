@@ -846,6 +846,7 @@ body {
   background: var(--qw-bg-panel);
   display: flex;
   flex-direction: column;
+  min-height: 0;
   z-index: 10;
   box-shadow: -2px 0 8px rgba(0,0,0,0.02);
 }
@@ -877,7 +878,11 @@ body {
 
 .qw-right-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -946,8 +951,11 @@ body {
 .qw-accordion-content {
   padding: 16px;
   background: #fff;
-  max-height: 600px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .qw-accordion-content::-webkit-scrollbar {

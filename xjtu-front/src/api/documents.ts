@@ -23,3 +23,8 @@ export async function batchDeleteDocuments(kbId: string, documentIds: string[]):
   });
   return data;
 }
+
+export async function deleteDocument(kbId: string, documentId: string): Promise<{ status: string }> {
+  const { data } = await http.delete(`/knowledge-bases/${kbId}/documents/${documentId}`);
+  return data;
+}
