@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import type { ReactNode } from "react";
 import { getMyAcademicAnalysis } from "./api/academic";
 
 import { me, ssoExchange } from "./api/auth";
@@ -70,6 +71,9 @@ type AgentWorkspacePreset = {
   retrievalConfig: RetrievalConfig;
   hasRetrievalPreset: boolean;
 };
+
+type RightPanelSectionKey = "summary" | "knowledge" | "documents" | "retrieval" | "diagnostics";
+type RightPanelSectionState = Record<RightPanelSectionKey, boolean>;
 
 const RETRIEVAL_LOCAL_KEY_PREFIX = "xjtu_retrieval_preset";
 
@@ -292,6 +296,13 @@ export default function App() {
   const [academicData, setAcademicData] = useState<AcademicAnalysisResponse | null>(null);
   const [academicLoading, setAcademicLoading] = useState(false);
   const [academicExpanded, setAcademicExpanded] = useState(true);
+  const [rightPanelSections, setRightPanelSections] = useState<RightPanelSectionState>({
+    summary: true,
+    knowledge: true,
+    documents: true,
+    retrieval: true,
+    diagnostics: true
+  });
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const thinkingTimerIdsRef = useRef<number[]>([]);
@@ -305,6 +316,16 @@ export default function App() {
   const isRoleLimited = tokenReady && userRole !== "admin";
   const canAccessAdminViews = !isRoleLimited;
   const canShowAcademic = tokenReady && userRole === "student";
+  const activeKb = useMemo(
+    () => kbs.find((item) => item.id === activeKbId) || null,
+    [kbs, activeKbId]
+  );
+  const enabledKbCount = enabledKbIds.length;
+  const enabledDocCount = enabledDocIds.length;
+  const totalChunkCount = useMemo(
+    () => docs.reduce((sum, doc) => sum + (Number(doc.chunk_count) || 0), 0),
+    [docs]
+  );
   const classComparison = useMemo(
     () => academicData?.cohort_comparison.find((item) => item.scope_type === "class") || null,
     [academicData]
@@ -347,6 +368,40 @@ export default function App() {
     } catch (e) {
       setError((e as Error).message || "操作失败");
     }
+  }
+
+  async function refreshKnowledgeBaseList(preferredKbId?: string) {
+    const result = await listKnowledgeBases({ limit: 50 });
+    const items = result.items;
+    setKbs(items);
+
+    if (!items.length) {
+      setActiveKbId("");
+      setEnabledKbIds([]);
+      setDocs([]);
+      setSelectedDocIds([]);
+      setEnabledDocIds([]);
+      return;
+    }
+
+    const resolvedActiveKbId =
+      (preferredKbId && items.some((item) => item.id === preferredKbId) && preferredKbId) ||
+      (activeKbId && items.some((item) => item.id === activeKbId) && activeKbId) ||
+      items[0].id;
+
+    setActiveKbId(resolvedActiveKbId);
+    setEnabledKbIds((prev) => {
+      const nextEnabledKbIds = prev.filter((id) => items.some((item) => item.id === id));
+      return nextEnabledKbIds.length ? nextEnabledKbIds : [resolvedActiveKbId];
+    });
+  }
+
+  async function refreshDocumentList(targetKbId: string) {
+    const result = await listDocuments(targetKbId);
+    const items = result.items;
+    setDocs(items);
+    setSelectedDocIds((prev) => prev.filter((id) => items.some((doc) => doc.id === id)));
+    setEnabledDocIds((prev) => prev.filter((id) => items.some((doc) => doc.id === id)));
   }
 
   useEffect(() => {
@@ -415,6 +470,28 @@ export default function App() {
     agentPreset.retrievalConfig,
     conversationId
   ]);
+
+  useEffect(() => {
+    if (!tokenReady || !canAccessAdminViews) return;
+    runSafely(async () => {
+      await refreshKnowledgeBaseList();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenReady, canAccessAdminViews]);
+
+  useEffect(() => {
+    if (!tokenReady || !canAccessAdminViews) return;
+    if (!activeKbId) {
+      setDocs([]);
+      setSelectedDocIds([]);
+      setEnabledDocIds([]);
+      return;
+    }
+    runSafely(async () => {
+      await refreshDocumentList(activeKbId);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKbId, tokenReady, canAccessAdminViews]);
 
   const patchChatMessage = (messageId: number, updater: (message: ChatMessage) => ChatMessage) => {
     setChatHistory((prev) => updateMessageById(prev, messageId, updater));
@@ -637,6 +714,34 @@ export default function App() {
     </div>
   );
 
+  const renderRightPanelSection = (
+    sectionKey: RightPanelSectionKey,
+    title: string,
+    content: ReactNode
+  ) => {
+    const isOpen = rightPanelSections[sectionKey];
+
+    return (
+      <section className={`qw-accordion ${isOpen ? "is-open" : ""}`}>
+        <button
+          type="button"
+          className="qw-accordion-trigger"
+          aria-expanded={isOpen}
+          onClick={() => {
+            setRightPanelSections((prev) => ({
+              ...prev,
+              [sectionKey]: !prev[sectionKey]
+            }));
+          }}
+        >
+          <span>{title}</span>
+          <span className={`qw-accordion-trigger-icon ${isOpen ? "is-open" : ""}`}>+</span>
+        </button>
+        {isOpen && <div className="qw-accordion-panel">{content}</div>}
+      </section>
+    );
+  };
+
   if (currentPage === "kbdoc" && canAccessAdminViews) {
     return (
       <main className="qw-layout" style={{ display: "block", minHeight: "100vh" }}>
@@ -676,8 +781,21 @@ export default function App() {
           <div className="qw-logo">AI</div>
           <div className="qw-brand-copy">
             <strong>西交 AI 智能体</strong>
-            <span>Knowledge & Chatbot</span>
+            <span>知识库与会话协作工作台</span>
           </div>
+        </div>
+
+        <div className="qw-sidebar-overview">
+          <article className="qw-sidebar-stat">
+            <span className="qw-kicker">当前知识库</span>
+            <strong>{activeKb?.name || "未选择知识库"}</strong>
+            <p>{enabledKbCount} 个知识库参与当前会话检索</p>
+          </article>
+          <article className="qw-sidebar-stat qw-sidebar-stat-muted">
+            <span className="qw-kicker">检索范围</span>
+            <strong>{enabledDocCount} 份文档已启用</strong>
+            <p>{totalChunkCount} 个文档片段已载入控制面板</p>
+          </article>
         </div>
 
         {canAccessAdminViews && (
@@ -731,12 +849,20 @@ export default function App() {
 
       <section className="qw-main-chat">
         <header className="qw-chat-header">
-          <div>
+          <div className="qw-chat-heading">
+            <span className="qw-kicker">智能体工作台</span>
             <h1>{agentPreset.agentTitle}</h1>
+            <p>统一处理问答、知识检索、学业分析与运行调试，界面结构保持稳定。</p>
           </div>
-          <div className="qw-chat-meta">
-            <span>Session: </span>
-            <code>{conversationId.slice(-8)}</code>
+          <div className="qw-chat-header-side">
+            <div className="qw-header-chip">
+              <span>当前会话</span>
+              <code>{conversationId.slice(-8)}</code>
+            </div>
+            <div className="qw-header-chip">
+              <span>当前检索范围</span>
+              <strong>{enabledKbCount} 个知识库 / {enabledDocCount} 份文档</strong>
+            </div>
           </div>
         </header>
 
@@ -1055,11 +1181,29 @@ export default function App() {
       {canAccessAdminViews && (
         <aside className="qw-right-panel">
           <div className="qw-right-header">
-            <h3>控制台面板</h3>
-            <span className="qw-subtitle">配置知识库、检索参数与调试信息</span>
+            <div className="qw-right-header-main">
+              <div>
+                <span className="qw-kicker">控制台面板</span>
+                <h3>知识库控制中心</h3>
+                <span className="qw-subtitle">右侧面板支持独立滚动，聊天区与输入区保持稳定。</span>
+              </div>
+              <div className="qw-right-stat-grid">
+                <div className="qw-right-stat">
+                  <strong>{kbs.length}</strong>
+                  <span>知识库</span>
+                </div>
+                <div className="qw-right-stat">
+                  <strong>{docs.length}</strong>
+                  <span>文档</span>
+                </div>
+                <div className="qw-right-stat">
+                  <strong>{enabledDocCount}</strong>
+                  <span>已启用</span>
+                </div>
+              </div>
+            </div>
             <button
-              className="qw-btn qw-btn-subtle"
-              style={{ marginTop: 8 }}
+              className="qw-btn qw-btn-primary"
               onClick={() => setCurrentPage("kbadmin")}
             >
               打开管理员知识库中心
@@ -1067,9 +1211,10 @@ export default function App() {
           </div>
 
           <div className="qw-right-scroll">
-            <details className="qw-accordion" open>
-              <summary>处理摘要</summary>
-              <div className="qw-accordion-content">
+            {renderRightPanelSection(
+              "summary",
+              "处理摘要",
+              <>
                 <p className="qw-section-tip">用于快速定位慢点与回答质量问题。</p>
                 {latestTimingSummary ? (
                   <div className="qw-grid-form" style={{ marginBottom: 12 }}>
@@ -1095,12 +1240,13 @@ export default function App() {
                 ) : (
                   <div className="qw-empty-text">暂无处理摘要内容。</div>
                 )}
-              </div>
-            </details>
+              </>
+            )}
 
-            <details className="qw-accordion" open>
-              <summary>知识库管理</summary>
-              <div className="qw-accordion-content">
+            {renderRightPanelSection(
+              "knowledge",
+              "知识库管理",
+              <>
                 <p className="qw-section-tip">创建、选择并启用知识库参与当前会话。</p>
                 <div className="qw-compact-row">
                   <input
@@ -1121,10 +1267,7 @@ export default function App() {
                         department: "演示",
                         owner: "admin"
                       });
-                      const result = await listKnowledgeBases({ limit: 50 });
-                      setKbs(result.items);
-                      if (!activeKbId && result.items.length) setActiveKbId(result.items[0].id);
-                      if (!enabledKbIds.length && result.items.length) setEnabledKbIds([result.items[0].id]);
+                      await refreshKnowledgeBaseList();
                     })}
                   >
                     新建知识库
@@ -1133,15 +1276,15 @@ export default function App() {
                     className="qw-btn qw-btn-subtle"
                     disabled={!tokenReady}
                     onClick={() => runSafely(async () => {
-                      const result = await listKnowledgeBases({ limit: 50 });
-                      setKbs(result.items);
+                      await refreshKnowledgeBaseList();
                     })}
                   >
                     刷新列表
                   </button>
                 </div>
 
-                <div className="qw-list-container">
+                <div className="qw-side-list-scroll">
+                  <div className="qw-list-container">
                   {kbs.map((kb) => (
                     <div key={kb.id} className={`qw-list-item ${activeKbId === kb.id ? "active" : ""}`}>
                       <div className="qw-item-main">
@@ -1153,9 +1296,11 @@ export default function App() {
                           className="qw-btn-icon qw-text-danger"
                           onClick={() => runSafely(async () => {
                             await deleteKnowledgeBase(kb.id, true);
-                            const result = await listKnowledgeBases({ limit: 50 });
-                            setKbs(result.items);
-                            if (activeKbId === kb.id) setActiveKbId("");
+                            setEnabledKbIds((prev) => prev.filter((id) => id !== kb.id));
+                            if (activeKbId === kb.id) {
+                              setActiveKbId("");
+                            }
+                            await refreshKnowledgeBaseList();
                           })}
                         >
                           删除
@@ -1177,13 +1322,15 @@ export default function App() {
                       </label>
                     </div>
                   ))}
+                  </div>
                 </div>
-              </div>
-            </details>
+              </>
+            )}
 
-            <details className="qw-accordion" open>
-              <summary>文档片段管理</summary>
-              <div className="qw-accordion-content">
+            {renderRightPanelSection(
+              "documents",
+              "文档片段管理",
+              <>
                 <p className="qw-section-tip">维护文档数据，并按需勾选参与问答检索的文档。</p>
                 <div className="qw-btn-group">
                   <input
@@ -1196,8 +1343,7 @@ export default function App() {
                       if (!files.length || !activeKbId) return;
                       runSafely(async () => {
                         await uploadDocuments(activeKbId, files);
-                        const result = await listDocuments(activeKbId);
-                        setDocs(result.items);
+                        await refreshDocumentList(activeKbId);
                       });
                     }}
                     disabled={!canOperateDoc}
@@ -1209,8 +1355,7 @@ export default function App() {
                     className="qw-btn qw-btn-subtle"
                     disabled={!canOperateDoc}
                     onClick={() => runSafely(async () => {
-                      const result = await listDocuments(activeKbId);
-                      setDocs(result.items);
+                      await refreshDocumentList(activeKbId);
                     })}
                   >
                     刷新列表
@@ -1220,59 +1365,60 @@ export default function App() {
                     disabled={!canOperateDoc || selectedDocIds.length === 0}
                     onClick={() => runSafely(async () => {
                       await batchDeleteDocuments(activeKbId, selectedDocIds);
-                      const result = await listDocuments(activeKbId);
-                      setDocs(result.items);
-                      setSelectedDocIds([]);
+                      await refreshDocumentList(activeKbId);
                     })}
                   >
                     批量删除
                   </button>
                 </div>
 
-                <div className="qw-list-container">
-                  {docs.length === 0 && <div className="qw-empty-text">暂无文档，请先上传或刷新列表。</div>}
-                  {docs.map((doc) => (
-                    <div key={doc.id} className="qw-list-item">
-                      <div className="qw-item-main">
-                        <label className="qw-checkbox">
+                <div className="qw-side-list-scroll">
+                  <div className="qw-list-container">
+                    {docs.length === 0 && <div className="qw-empty-text">暂无文档，请先上传或刷新列表。</div>}
+                    {docs.map((doc) => (
+                      <div key={doc.id} className="qw-list-item">
+                        <div className="qw-item-main">
+                          <label className="qw-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={selectedDocIds.includes(doc.id)}
+                              onChange={(e) => {
+                                setSelectedDocIds((prev) => (
+                                  e.target.checked
+                                    ? [...prev, doc.id]
+                                    : prev.filter((id) => id !== doc.id)
+                                ));
+                              }}
+                            />
+                            <span className="qw-truncate" title={doc.file_name}>{doc.file_name}</span>
+                          </label>
+                          <span className="qw-badge">{doc.chunk_count} 段</span>
+                        </div>
+                        <label className="qw-checkbox qw-mt-2">
                           <input
                             type="checkbox"
-                            checked={selectedDocIds.includes(doc.id)}
+                            checked={enabledDocIds.includes(doc.id)}
                             onChange={(e) => {
-                              setSelectedDocIds((prev) => (
+                              setEnabledDocIds((prev) => (
                                 e.target.checked
-                                  ? [...prev, doc.id]
+                                  ? [...new Set([...prev, doc.id])]
                                   : prev.filter((id) => id !== doc.id)
                               ));
                             }}
                           />
-                          <span className="qw-truncate" title={doc.file_name}>{doc.file_name}</span>
+                          参与检索问答
                         </label>
-                        <span className="qw-badge">{doc.chunk_count} 段</span>
                       </div>
-                      <label className="qw-checkbox qw-mt-2">
-                        <input
-                          type="checkbox"
-                          checked={enabledDocIds.includes(doc.id)}
-                          onChange={(e) => {
-                            setEnabledDocIds((prev) => (
-                              e.target.checked
-                                ? [...new Set([...prev, doc.id])]
-                                : prev.filter((id) => id !== doc.id)
-                            ));
-                          }}
-                        />
-                        参与检索问答
-                      </label>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </details>
+              </>
+            )}
 
-            <details className="qw-accordion" open>
-              <summary>检索参数调优</summary>
-              <div className="qw-accordion-content">
+            {renderRightPanelSection(
+              "retrieval",
+              "检索参数调优",
+              <>
                 <p className="qw-section-tip">按会话调整召回策略，便于评估检索效果。</p>
                 <div className="qw-grid-form">
                   <span>召回数量</span>
@@ -1325,12 +1471,13 @@ export default function App() {
                     应用当前参数
                   </button>
                 </div>
-              </div>
-            </details>
+              </>
+            )}
 
-            <details className="qw-accordion" open>
-              <summary>诊断与日志</summary>
-              <div className="qw-accordion-content">
+            {renderRightPanelSection(
+              "diagnostics",
+              "诊断与日志",
+              <>
                 <p className="qw-section-tip">查看运行状态、敏感词配置和会话日志。</p>
                 <div className="qw-btn-group">
                   <button
@@ -1380,8 +1527,8 @@ export default function App() {
                     <pre>{runtimeJson}</pre>
                   </div>
                 )}
-              </div>
-            </details>
+              </>
+            )}
           </div>
         </aside>
       )}
