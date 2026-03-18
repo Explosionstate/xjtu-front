@@ -42,3 +42,14 @@ export async function updateKnowledgeBase(
   const { data } = await http.put<KnowledgeBaseItem>(`/knowledge-bases/${kbId}`, payload);
   return data;
 }
+
+export async function rebuildKnowledgeBaseVectorstore(kbId: string): Promise<{
+  status: string;
+  docs_total: number;
+  ready_docs: number;
+  indexed_chunks: number;
+  vectorstore_reset: boolean;
+}> {
+  const { data } = await http.post(`/knowledge-bases/${kbId}/rebuild-vectorstore`);
+  return data;
+}

@@ -2,7 +2,7 @@
 import "./App.css";
 import { getMyAcademicAnalysis } from "./api/academic";
 
-import { ssoExchange } from "./api/auth";
+import { me, ssoExchange } from "./api/auth";
 import { chatCompletions, retrievalDebug } from "./api/chat";
 import { setSensitiveWords } from "./api/config";
 import { batchDeleteDocuments, listDocuments, uploadDocuments } from "./api/documents";
@@ -22,10 +22,11 @@ import type {
   DocumentItem,
   KnowledgeBaseItem
 } from "./types/api";
-import { setToken } from "./utils/auth";
+import { getToken, setToken } from "./utils/auth";
 import { ChatSocket } from "./utils/chatSocket";
 import KbDocManagePage from "./pages/KbDocManagePage";
 import KbUpdateUploadPage from "./pages/KbUpdateUploadPage";
+import AdminKnowledgeManagePage from "./pages/AdminKnowledgeManagePage";
 
 const socket = new ChatSocket();
 
@@ -234,7 +235,9 @@ function buildRetrievalLocalKey(role: UserRole, scope: string): string {
 
 function loadLocalRetrievalConfig(role: UserRole, scope: string): RetrievalConfig | null {
   try {
-    const raw = localStorage.getItem(buildRetrievalLocalKey(role, scope));
+    const exactKey = buildRetrievalLocalKey(role, scope);
+    const fallbackKey = buildRetrievalLocalKey("unknown", scope);
+    const raw = localStorage.getItem(exactKey) || localStorage.getItem(fallbackKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<RetrievalConfig>;
     if (!parsed || typeof parsed !== "object") return null;
@@ -251,13 +254,17 @@ function loadLocalRetrievalConfig(role: UserRole, scope: string): RetrievalConfi
 
 function saveLocalRetrievalConfig(role: UserRole, scope: string, config: RetrievalConfig): void {
   localStorage.setItem(buildRetrievalLocalKey(role, scope), JSON.stringify(config));
+  if (role !== "unknown") {
+    localStorage.setItem(buildRetrievalLocalKey("unknown", scope), JSON.stringify(config));
+  }
 }
 
 export default function App() {
   const agentPreset = useMemo(() => parseAgentWorkspacePreset(window.location.search), []);
-  const [currentPage, setCurrentPage] = useState<"ai" | "kbdoc" | "kbops">("ai");
+  const initialPage = agentPreset.entry === "admin-agent-center-dashboard" ? "kbadmin" : "ai";
+  const [currentPage, setCurrentPage] = useState<"ai" | "kbdoc" | "kbops" | "kbadmin">(initialPage);
   const [error, setError] = useState("");
-  const [tokenReady, setTokenReady] = useState(false);
+  const [tokenReady, setTokenReady] = useState(Boolean(getToken()));
   const [userRole, setUserRole] = useState<UserRole>("unknown");
 
   const [kbs, setKbs] = useState<KnowledgeBaseItem[]>([]);
@@ -302,6 +309,24 @@ export default function App() {
     () => academicData?.cohort_comparison.find((item) => item.scope_type === "class") || null,
     [academicData]
   );
+  const latestAssistantThinking = useMemo(
+    () =>
+      [...chatHistory]
+        .reverse()
+        .find((item) => item.role === "assistant" && item.thinking?.content)?.thinking || null,
+    [chatHistory]
+  );
+  const latestTimingSummary = useMemo(() => {
+    const content = latestAssistantThinking?.content || "";
+    const match = content.match(/profile_ms=(\d+)[，,]\s*retrieval_ms=(\d+)[，,]\s*llm_ms=(\d+)[，,]\s*total_ms=(\d+)/);
+    if (!match) return null;
+    return {
+      profile_ms: Number(match[1]),
+      retrieval_ms: Number(match[2]),
+      llm_ms: Number(match[3]),
+      total_ms: Number(match[4])
+    };
+  }, [latestAssistantThinking]);
   const primaryHintText = agentPreset.presetQuestion || "总结本周新增文档的重点内容";
   const secondaryHintText = "根据知识库解释某个技术概念";
 
@@ -325,7 +350,16 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ticket = params.get("sso_ticket");
-    if (!ticket) return;
+    if (!ticket) {
+      if (getToken()) {
+        runSafely(async () => {
+          const profile = await me();
+          setUserRole(normalizeRole(profile.role));
+          setTokenReady(true);
+        });
+      }
+      return;
+    }
 
     params.delete("sso_ticket");
     const nextQuery = params.toString();
@@ -619,6 +653,20 @@ export default function App() {
     return <KbUpdateUploadPage onError={setError} onBack={() => setCurrentPage("ai")} />;
   }
 
+  if (currentPage === "kbadmin" && canAccessAdminViews) {
+    return (
+      <AdminKnowledgeManagePage
+        conversationId={conversationId}
+        onError={setError}
+        onBack={() => setCurrentPage("ai")}
+        onApplyRetrievalConfig={(data) => {
+          setSessionConfig(data);
+          saveLocalRetrievalConfig(userRole, retrievalScope, data);
+        }}
+      />
+    );
+  }
+
   return (
     <main className={`qw-layout${isRoleLimited ? " qw-layout-limited" : ""}`}>
       <aside className="qw-sidebar">
@@ -637,6 +685,9 @@ export default function App() {
             </button>
             <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("kbops")}>
               知识库批量操作
+            </button>
+            <button className="qw-btn qw-btn-subtle" onClick={() => setCurrentPage("kbadmin")}>
+              管理员知识库中心
             </button>
           </div>
         )}
@@ -1004,9 +1055,45 @@ export default function App() {
           <div className="qw-right-header">
             <h3>控制台面板</h3>
             <span className="qw-subtitle">配置知识库、检索参数与调试信息</span>
+            <button
+              className="qw-btn qw-btn-subtle"
+              style={{ marginTop: 8 }}
+              onClick={() => setCurrentPage("kbadmin")}
+            >
+              打开管理员知识库中心
+            </button>
           </div>
 
           <div className="qw-right-scroll">
+            <details className="qw-accordion" open>
+              <summary>处理摘要</summary>
+              <div className="qw-accordion-content">
+                <p className="qw-section-tip">用于快速定位慢点与回答质量问题。</p>
+                {latestTimingSummary ? (
+                  <div className="qw-grid-form" style={{ marginBottom: 12 }}>
+                    <span>profile_ms</span>
+                    <strong>{latestTimingSummary.profile_ms}</strong>
+                    <span>retrieval_ms</span>
+                    <strong>{latestTimingSummary.retrieval_ms}</strong>
+                    <span>llm_ms</span>
+                    <strong>{latestTimingSummary.llm_ms}</strong>
+                    <span>total_ms</span>
+                    <strong>{latestTimingSummary.total_ms}</strong>
+                  </div>
+                ) : (
+                  <div className="qw-empty-text">暂无耗时数据，请先发起一次问答。</div>
+                )}
+                {latestAssistantThinking?.content ? (
+                  <div className="qw-debug-box" style={{ maxHeight: 240 }}>
+                    <div className="qw-debug-title">最新处理摘要原文</div>
+                    <pre>{latestAssistantThinking.content}</pre>
+                  </div>
+                ) : (
+                  <div className="qw-empty-text">暂无处理摘要内容。</div>
+                )}
+              </div>
+            </details>
+
             <details className="qw-accordion" open>
               <summary>知识库管理</summary>
               <div className="qw-accordion-content">
@@ -1090,7 +1177,7 @@ export default function App() {
               </div>
             </details>
 
-            <details className="qw-accordion">
+            <details className="qw-accordion" open>
               <summary>文档片段管理</summary>
               <div className="qw-accordion-content">
                 <p className="qw-section-tip">维护文档数据，并按需勾选参与问答检索的文档。</p>
@@ -1179,7 +1266,7 @@ export default function App() {
               </div>
             </details>
 
-            <details className="qw-accordion">
+            <details className="qw-accordion" open>
               <summary>检索参数调优</summary>
               <div className="qw-accordion-content">
                 <p className="qw-section-tip">按会话调整召回策略，便于评估检索效果。</p>
@@ -1237,7 +1324,7 @@ export default function App() {
               </div>
             </details>
 
-            <details className="qw-accordion">
+            <details className="qw-accordion" open>
               <summary>诊断与日志</summary>
               <div className="qw-accordion-content">
                 <p className="qw-section-tip">查看运行状态、敏感词配置和会话日志。</p>
