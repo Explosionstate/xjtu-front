@@ -5,7 +5,7 @@ const baseURL = "http://127.0.0.1:8000";
 
 export const http = axios.create({
   baseURL,
-  timeout: 30000
+  timeout: 60000
 });
 
 http.interceptors.request.use((config) => {
