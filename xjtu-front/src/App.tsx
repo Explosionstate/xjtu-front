@@ -1236,7 +1236,6 @@ export default function App() {
               </svg>
             </button>
           </div>
-          <p className="qw-input-tip">回答会优先参考当前勾选的知识库和文档范围。</p>
         </div>
       </section>
 
