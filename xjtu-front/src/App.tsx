@@ -169,6 +169,32 @@ function formatDateTime(value: string | null | undefined): string {
   return date.toLocaleString();
 }
 
+function localizeAcademicRecommendation(item: string): string {
+  const text = item.trim();
+  if (!text) return text;
+  if (/[\u4e00-\u9fff]/u.test(text)) return text;
+
+  const weakCourseMatch = text.match(
+    /^Focus on weak courses first:\s*(.+?)\.\s*Use weekly checkpoints and quiz review\.$/i
+  );
+  if (weakCourseMatch) {
+    return `建议优先补强薄弱课程：${weakCourseMatch[1]}。可以按周设置复习检查点，并结合测验与错题回顾持续巩固。`;
+  }
+
+  switch (text) {
+    case "Prioritize high-risk items this week and review with counselor or advisor.":
+      return "建议优先处理本周的高风险事项，并尽快与辅导员或学业导师沟通复盘。";
+    case "Current score is significantly below class average. Add 8-10 focused study hours per week.":
+      return "当前成绩明显低于班级平均水平，建议每周增加 8 到 10 小时的专项学习时间，集中补齐薄弱环节。";
+    case "Resolve open high-risk warnings before starting advanced improvement plans.":
+      return "在开展进一步提升计划前，建议先处理当前尚未关闭的高风险预警事项。";
+    case "Performance is stable. Keep the current rhythm and continue strengthening core courses.":
+      return "当前整体表现较为稳定，建议保持现有学习节奏，并持续巩固核心课程。";
+    default:
+      return text;
+  }
+}
+
 function riskClassName(risk: string | undefined): string {
   const normalized = (risk || "").toLowerCase();
   if (normalized === "critical") return "critical";
@@ -1038,7 +1064,9 @@ export default function App() {
                     <h3>个性化建议</h3>
                     {academicData.recommendations.length > 0 ? (
                       <ul className="qw-academic-list qw-academic-bullets">
-                        {academicData.recommendations.map((item, idx) => <li key={`${item}-${idx}`}>{item}</li>)}
+                        {academicData.recommendations.map((item, idx) => (
+                          <li key={`${item}-${idx}`}>{localizeAcademicRecommendation(item)}</li>
+                        ))}
                       </ul>
                     ) : (
                       <div className="qw-empty-text">暂无建议结果。</div>

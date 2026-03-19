@@ -530,6 +530,9 @@ textarea {
   border: 1px solid var(--qw-border-light);
   background: linear-gradient(180deg, #ffffff, #f8fbff);
   box-shadow: var(--qw-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .qw-academic-toolbar,
@@ -554,6 +557,13 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-height: 0;
+  max-height: min(64vh, 920px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 6px;
 }
 
 .qw-academic-grid {
@@ -717,6 +727,7 @@ textarea {
 }
 
 .qw-chat-scroll,
+.qw-academic-content,
 .qw-right-scroll,
 .qw-admin-scroll,
 .qw-admin-list-scroll,
@@ -728,6 +739,7 @@ textarea {
 }
 
 .qw-chat-scroll::-webkit-scrollbar,
+.qw-academic-content::-webkit-scrollbar,
 .qw-right-scroll::-webkit-scrollbar,
 .qw-admin-scroll::-webkit-scrollbar,
 .qw-admin-list-scroll::-webkit-scrollbar,
@@ -739,6 +751,7 @@ textarea {
 }
 
 .qw-chat-scroll::-webkit-scrollbar-thumb,
+.qw-academic-content::-webkit-scrollbar-thumb,
 .qw-right-scroll::-webkit-scrollbar-thumb,
 .qw-admin-scroll::-webkit-scrollbar-thumb,
 .qw-admin-list-scroll::-webkit-scrollbar-thumb,
@@ -1090,19 +1103,44 @@ textarea {
 .qw-send-btn {
   width: 48px;
   height: 48px;
-  border: none;
+  border: 1px solid rgba(37, 99, 235, 0.18);
   border-radius: 16px;
-  background: linear-gradient(135deg, var(--qw-strong), var(--qw-primary));
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 58%, #4f46e5 100%);
   color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 16px 28px rgba(79, 70, 229, 0.22);
+  box-shadow: 0 16px 28px rgba(37, 99, 235, 0.28);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease,
+    filter 0.18s ease;
+}
+
+.qw-send-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 56%, #4338ca 100%);
+  box-shadow: 0 20px 32px rgba(37, 99, 235, 0.34);
+}
+
+.qw-send-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.24);
+  filter: saturate(0.96);
+}
+
+.qw-send-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 4px rgba(37, 99, 235, 0.16),
+    0 16px 28px rgba(37, 99, 235, 0.28);
 }
 
 .qw-send-btn:disabled {
-  background: #dbe3ee;
+  border-color: rgba(203, 213, 225, 0.88);
+  background: linear-gradient(135deg, #dbe5f1, #cbd5e1);
   color: #94a3b8;
   box-shadow: none;
   cursor: default;
