@@ -102,7 +102,7 @@ textarea {
   border-radius: 999px;
   background: var(--qw-primary-soft);
   color: var(--qw-primary);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -120,7 +120,7 @@ textarea {
   color: var(--qw-text-secondary);
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   text-decoration: none;
 }
@@ -279,7 +279,7 @@ textarea {
 }
 
 .qw-brand-copy span {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--qw-text-muted);
 }
 
@@ -299,19 +299,38 @@ textarea {
 }
 
 .qw-sidebar-stat strong {
-  font-size: 18px;
+  font-size: 19px;
   line-height: 1.4;
 }
 
 .qw-sidebar-stat p {
   margin: 0;
   color: var(--qw-text-muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
 .qw-sidebar-stat-muted {
   background: linear-gradient(180deg, #f8fbff 0%, #f3f6fb 100%);
+}
+
+.qw-scope-panel {
+  border-radius: 0;
+  border-color: #94a3b8;
+  background: #fff;
+  box-shadow: none;
+  padding: 14px 16px;
+  gap: 6px;
+  transition: border-color 0.18s ease;
+}
+
+.qw-scope-panel:hover {
+  border-color: #64748b;
+}
+
+.qw-scope-panel .qw-kicker {
+  border-radius: 0;
+  padding: 4px 8px;
 }
 
 .qw-sidebar-actions {
@@ -342,7 +361,7 @@ textarea {
 }
 
 .qw-history-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--qw-text-secondary);
   padding-left: 6px;
@@ -367,7 +386,7 @@ textarea {
 }
 
 .qw-history-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -385,7 +404,7 @@ textarea {
   background: var(--qw-surface-muted);
   color: var(--qw-text-secondary);
   border: 1px solid rgba(203, 213, 225, 0.85);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -396,7 +415,7 @@ textarea {
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), #ffffff);
   border: 1px solid var(--qw-border-light);
   color: var(--qw-text-muted);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -442,7 +461,7 @@ textarea {
 }
 
 .qw-chat-heading h1 {
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.2;
 }
 
@@ -476,14 +495,14 @@ textarea {
 
 .qw-header-chip span {
   color: var(--qw-text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .qw-header-chip strong,
 .qw-header-chip code {
   color: var(--qw-text-main);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -527,7 +546,7 @@ textarea {
   flex-wrap: wrap;
   gap: 8px 14px;
   color: var(--qw-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .qw-academic-content {
@@ -552,7 +571,7 @@ textarea {
 
 .qw-academic-card h3 {
   margin: 0 0 12px;
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .qw-academic-card-full {
@@ -570,7 +589,7 @@ textarea {
 
 .qw-academic-list {
   color: var(--qw-text-secondary);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .qw-academic-bullets {
@@ -594,7 +613,7 @@ textarea {
   padding: 0 10px;
   border-radius: 999px;
   border: 1px solid transparent;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -657,13 +676,13 @@ textarea {
   gap: 8px 12px;
   margin-top: 8px;
   color: var(--qw-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .qw-academic-subtitle {
   margin: 12px 0 8px;
   color: var(--qw-text-secondary);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .qw-academic-inline-tip,
@@ -675,7 +694,7 @@ textarea {
   border: 1px dashed var(--qw-border);
   background: rgba(248, 250, 252, 0.9);
   color: var(--qw-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -694,7 +713,7 @@ textarea {
 
 .qw-empty-text {
   color: var(--qw-text-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .qw-chat-scroll,
@@ -741,8 +760,9 @@ textarea {
 }
 
 .qw-chat-container {
-  max-width: 920px;
-  margin: 0 auto;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 12px;
 }
 
 .qw-empty-state {
@@ -750,10 +770,12 @@ textarea {
   border: 1px solid var(--qw-border-light);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
   box-shadow: var(--qw-shadow-sm);
+  max-width: 920px; /* Empty state looks better centered/limited */
+  margin: 0 auto;
 }
 
 .qw-empty-state h2 {
-  font-size: 30px;
+  font-size: 32px;
   line-height: 1.2;
 }
 
@@ -761,7 +783,7 @@ textarea {
   max-width: 620px;
   margin: 14px 0 0;
   color: var(--qw-text-secondary);
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.7;
 }
 
@@ -780,7 +802,7 @@ textarea {
   background: var(--qw-panel-strong);
   box-shadow: var(--qw-shadow-sm);
   color: var(--qw-text-main);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
   cursor: pointer;
   transition: transform 0.18s ease, border-color 0.18s ease;
@@ -793,64 +815,96 @@ textarea {
 
 .qw-msg-row {
   display: flex;
-  gap: 14px;
+  width: 100%;
+  gap: 12px;
   align-items: flex-start;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
+}
+
+.qw-msg-row.ai {
+  justify-content: flex-start;
+  padding-right: 28px;
 }
 
 .qw-msg-row.user {
-  flex-direction: row-reverse;
+  flex-direction: row;
+  justify-content: flex-end;
+  padding-left: 28px;
 }
 
 .qw-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   flex-shrink: 0;
-  box-shadow: var(--qw-shadow-sm);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+  margin-top: 0;
 }
 
 .qw-avatar.ai {
-  background: linear-gradient(135deg, #0f766e, #14b8a6);
+  background: #0f766e;
   color: #fff;
 }
 
 .qw-avatar.user {
-  background: linear-gradient(135deg, #dbeafe, #eff6ff);
-  color: #1d4ed8;
+  background: #e8edf5;
+  color: #334155;
+  border: 1px solid #d7dee9;
 }
 
 .qw-bubble {
-  max-width: min(760px, 86%);
+  max-width: min(760px, 78%);
+  font-size: 15px;
+  line-height: 1.72;
+  color: var(--qw-text-main);
 }
 
 .qw-msg-row.ai .qw-bubble,
 .qw-msg-row.user .qw-bubble {
-  padding: 18px 20px;
-  border-radius: 22px;
-  border: 1px solid var(--qw-border-light);
-  box-shadow: var(--qw-shadow-sm);
+  padding: 16px 18px;
+  border-radius: 16px;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+  border: 1px solid #d8e0ea;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
 }
 
 .qw-msg-row.ai .qw-bubble {
-  background: var(--qw-panel-strong);
+  background: #fff;
+  border-color: #d7e0ea;
+    margin-top:19px;
 }
 
 .qw-msg-row.user .qw-bubble {
-  background: linear-gradient(180deg, #eef3ff, #ffffff);
-  border-bottom-right-radius: 8px;
+  margin-left: 0;
+  background: #edf3fb;
+  border-color: #c8d8ea;
+  color: #0f172a;
+  order: 1;
+    margin-top:19px;
+}
+
+.qw-msg-row.user .qw-avatar {
+  order: 2;
 }
 
 .qw-thinking-panel {
-  margin-bottom: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: var(--qw-surface);
+  margin-bottom: 10px;
+  border-radius: 12px;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  border: 1px solid #d9e2ec;
+  background: #f8fafd;
   overflow: hidden;
 }
 
@@ -858,15 +912,17 @@ textarea {
   width: 100%;
   border: none;
   background: transparent;
-  color: var(--qw-text-secondary);
-  padding: 12px 14px;
+  color: #334155;
+  padding: 10px 12px;
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
 }
 
 .qw-thinking-toggle.is-disabled {
@@ -885,21 +941,22 @@ textarea {
 }
 
 .qw-thinking-body {
-  padding: 0 14px 14px 38px;
-  color: var(--qw-text-secondary);
-  font-size: 13px;
-  line-height: 1.7;
+  padding: 0 12px 12px 34px;
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.68;
   white-space: pre-wrap;
 }
 
 .qw-answer-text {
   white-space: pre-wrap;
-  line-height: 1.8;
+  line-height: 1.76;
+  color: #0f172a;
 }
 
 .qw-answer-loading,
 .qw-typing {
-  color: var(--qw-text-muted);
+  color: #475569;
 }
 
 .qw-scroll-anchor {
@@ -910,6 +967,13 @@ textarea {
   flex: 0 0 auto;
   width: 100%;
   padding: 0 24px 24px;
+}
+
+/* Limit input box width separately if desired,
+   but keeping it full width matches the chat container change */
+.qw-input-container {
+   /* No class 'qw-input-container' in original, assuming wrapper handles it. */
+   /* If input area feels too wide, we can add max-width to .qw-input-box specifically. */
 }
 
 .qw-input-toolbar {
@@ -929,7 +993,7 @@ textarea {
   align-items: center;
   gap: 10px;
   color: var(--qw-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -1024,8 +1088,8 @@ textarea {
 }
 
 .qw-send-btn {
-  width: 46px;
-  height: 46px;
+  width: 48px;
+  height: 48px;
   border: none;
   border-radius: 16px;
   background: linear-gradient(135deg, var(--qw-strong), var(--qw-primary));
@@ -1048,7 +1112,7 @@ textarea {
   margin: 10px 0 0;
   text-align: center;
   color: var(--qw-text-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .qw-right-panel {
@@ -1081,7 +1145,7 @@ textarea {
 }
 
 .qw-right-header h3 {
-  font-size: 22px;
+  font-size: 24px;
 }
 
 .qw-subtitle {
@@ -1108,12 +1172,12 @@ textarea {
 }
 
 .qw-right-stat strong {
-  font-size: 18px;
+  font-size: 19px;
 }
 
 .qw-right-stat span {
   color: var(--qw-text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -1161,7 +1225,7 @@ textarea {
   justify-content: space-between;
   gap: 12px;
   padding: 16px 18px;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--qw-text-main);
   text-align: left;
@@ -1174,7 +1238,7 @@ textarea {
 
 .qw-accordion-trigger-icon {
   color: var(--qw-text-muted);
-  font-size: 18px;
+  font-size: 19px;
   line-height: 1;
   transition: transform 0.18s ease, color 0.18s ease;
 }
@@ -1250,13 +1314,13 @@ textarea {
 
 .qw-grid-form span {
   color: var(--qw-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .qw-grid-form strong {
   color: var(--qw-text-main);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .qw-list-container {
@@ -1296,15 +1360,15 @@ textarea {
   align-items: center;
   gap: 10px;
   color: var(--qw-text-secondary);
-  font-size: 14px;
+  font-size: 15px;
   min-width: 0;
 }
 
 .qw-checkbox input,
 .qw-radio input,
 .qw-admin-doc-main input {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   accent-color: var(--qw-primary);
 }
 
@@ -1322,13 +1386,13 @@ textarea {
   overflow: auto;
   color: inherit;
   font-family: Consolas, "Courier New", monospace;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   white-space: pre-wrap;
 }
 
 .qw-debug-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -1341,7 +1405,7 @@ textarea {
   background: var(--qw-surface);
   display: grid;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .qw-admin-shell {
@@ -1370,7 +1434,7 @@ textarea {
 }
 
 .qw-admin-topbar-copy h1 {
-  font-size: 30px;
+  font-size: 32px;
 }
 
 .qw-admin-topbar-meta,
@@ -1388,7 +1452,7 @@ textarea {
   min-height: 34px;
   padding: 0 12px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -1442,7 +1506,7 @@ textarea {
 
 .qw-admin-panel-head h2,
 .qw-admin-card h2 {
-  font-size: 24px;
+  font-size: 26px;
   line-height: 1.2;
 }
 
@@ -1487,7 +1551,7 @@ textarea {
 }
 
 .qw-admin-kb-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -1542,7 +1606,7 @@ textarea {
 
 .qw-admin-field span {
   color: var(--qw-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -1581,7 +1645,7 @@ textarea {
 
 .qw-admin-doc-name {
   display: block;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--qw-text-main);
 }
@@ -1726,6 +1790,16 @@ textarea {
 
   .qw-input-box {
     padding: 14px 16px;
+  }
+
+  .qw-msg-row.ai,
+  .qw-msg-row.user {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .qw-bubble {
+    max-width: 100%;
   }
 
   .qw-admin-topbar-left {
