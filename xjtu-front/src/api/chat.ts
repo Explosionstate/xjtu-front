@@ -9,7 +9,18 @@ export async function chatCompletions(payload: {
   llm_enabled?: boolean;
   messages: Array<{ role: "user" | "assistant"; content: string }>;
 }): Promise<ChatCompletionResponse> {
-  const { data } = await http.post<ChatCompletionResponse>("/chat/completions", payload);
+  const latestQuestion = [...payload.messages]
+    .reverse()
+    .find((item) => item.role === "user")?.content || "";
+  const isStudentGrowth = ["student-growth", "student_growth", "student"].includes(
+    (payload.agent_key || "").toLowerCase()
+  );
+  const isAcademicAnalysis =
+    isStudentGrowth && /学业分析|学习分析|成绩分析|学情分析/.test(latestQuestion);
+
+  const { data } = await http.post<ChatCompletionResponse>("/chat/completions", payload, {
+    timeout: isAcademicAnalysis ? 120000 : 60000
+  });
   return data;
 }
 
