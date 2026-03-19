@@ -33,7 +33,9 @@ export async function retrievalDebug(payload: {
   fusion_mode?: string;
   alpha?: number;
 }) {
-  const { data } = await http.post("/chat/retrieval-debug", payload);
+  const { data } = await http.post("/chat/retrieval-debug", payload, {
+    timeout: 120000
+  });
   return data;
 }
 

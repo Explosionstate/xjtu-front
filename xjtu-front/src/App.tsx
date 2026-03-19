@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import type { ReactNode } from "react";
 import { getMyAcademicAnalysis } from "./api/academic";
@@ -76,121 +76,6 @@ type RightPanelSectionKey = "summary" | "knowledge" | "documents" | "retrieval" 
 type RightPanelSectionState = Record<RightPanelSectionKey, boolean>;
 
 const RETRIEVAL_LOCAL_KEY_PREFIX = "xjtu_retrieval_preset";
-
-type AgentKnowledgeRule = {
-  label: string;
-  departmentHints: string[];
-  keywordHints: string[];
-};
-
-const ADMIN_OWNER_HINTS = ["admin", "administrator", "管理员", "super_admin", "kb_admin"];
-
-const AGENT_KB_RULES: Record<string, AgentKnowledgeRule> = {
-  "student-growth": {
-    label: "学生成长类",
-    departmentHints: ["student-growth", "学生成长", "学生发展", "student"],
-    keywordHints: ["学生成长", "成长", "学业发展", "student", "growth"]
-  },
-  "teacher-assistant": {
-    label: "教学助教类",
-    departmentHints: ["teacher-assistant", "教师助教", "教学助教", "教学", "teacher"],
-    keywordHints: ["教师", "助教", "教学", "课堂", "teaching", "assistant"]
-  },
-  "counselor-ideology": {
-    label: "辅导员思政类",
-    departmentHints: ["counselor-ideology", "辅导员思政", "辅导员", "思政辅导"],
-    keywordHints: ["辅导员", "班会", "学生管理", "心理关怀", "counselor", "ideology"]
-  },
-  "risk-warning": {
-    label: "学情预警类",
-    departmentHints: ["risk-warning", "学情预警", "风险预警", "预警", "risk"],
-    keywordHints: ["学情预警", "风险", "预警", "异常行为", "risk", "warning"]
-  },
-  "report-assistant": {
-    label: "学情报告类",
-    departmentHints: ["report-assistant", "学情报告", "报告生成", "report"],
-    keywordHints: ["学情报告", "报告", "月报", "总结", "report", "summary"]
-  },
-  "policy-qa": {
-    label: "思政知识问答类",
-    departmentHints: ["policy-qa", "思政知识问答", "政策问答", "政策解读", "qa"],
-    keywordHints: ["思政知识", "政策解读", "政策问答", "知识问答", "policy", "qa"]
-  }
-};
-
-function normalizeMatchText(value: string | null | undefined): string {
-  return (value || "").trim().toLowerCase();
-}
-
-function toTimeValue(value: string | undefined): number {
-  if (!value) return 0;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function sortKnowledgeBasesByFreshness(items: KnowledgeBaseItem[]): KnowledgeBaseItem[] {
-  return [...items].sort((a, b) => {
-    const byUpdated = toTimeValue(b.updated_at) - toTimeValue(a.updated_at);
-    if (byUpdated !== 0) return byUpdated;
-    return toTimeValue(b.created_at) - toTimeValue(a.created_at);
-  });
-}
-
-function getAgentKnowledgeRule(agentKey: string): AgentKnowledgeRule | null {
-  const normalized = normalizeMatchText(agentKey);
-  return AGENT_KB_RULES[normalized] || null;
-}
-
-function scoreKnowledgeBaseForAgent(kb: KnowledgeBaseItem, rule: AgentKnowledgeRule): number {
-  const department = normalizeMatchText(kb.department);
-  const searchable = normalizeMatchText([kb.department, kb.name, kb.description, kb.owner].join(" "));
-  if (!searchable) return 0;
-
-  let score = 0;
-  for (const hint of rule.departmentHints) {
-    const token = normalizeMatchText(hint);
-    if (!token) continue;
-    if (department === token) {
-      score += 120;
-      continue;
-    }
-    if (department.includes(token)) {
-      score += 60;
-    }
-  }
-  for (const hint of rule.keywordHints) {
-    const token = normalizeMatchText(hint);
-    if (!token) continue;
-    if (searchable.includes(token)) {
-      score += 20;
-    }
-  }
-
-  if (score > 0) {
-    score += Math.min(12, Number(kb.document_count) || 0);
-  }
-  return score;
-}
-
-function getAgentMatchedKnowledgeBases(items: KnowledgeBaseItem[], agentKey: string): KnowledgeBaseItem[] {
-  const rule = getAgentKnowledgeRule(agentKey);
-  if (!rule) return [];
-
-  return items
-    .map((item) => ({ item, score: scoreKnowledgeBaseForAgent(item, rule) }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return toTimeValue(b.item.updated_at) - toTimeValue(a.item.updated_at);
-    })
-    .map((entry) => entry.item);
-}
-
-function isAdminOwnedKnowledgeBase(kb: KnowledgeBaseItem): boolean {
-  const owner = normalizeMatchText(kb.owner);
-  if (!owner) return false;
-  return ADMIN_OWNER_HINTS.some((hint) => owner.includes(normalizeMatchText(hint)));
-}
 
 function createMessageId() {
   return Date.now() + Math.floor(Math.random() * 1000);
@@ -486,10 +371,8 @@ export default function App() {
   }
 
   async function refreshKnowledgeBaseList(preferredKbId?: string) {
-    const result = await listKnowledgeBases({ limit: 100 });
-    const items = sortKnowledgeBasesByFreshness(
-      result.items.filter((item) => normalizeMatchText(item.status) !== "deleted")
-    );
+    const result = await listKnowledgeBases({ limit: 50 });
+    const items = result.items;
     setKbs(items);
 
     if (!items.length) {
@@ -501,34 +384,15 @@ export default function App() {
       return;
     }
 
-    const adminOwnedItems = items.filter(isAdminOwnedKnowledgeBase);
-    const matchedAdminItems = getAgentMatchedKnowledgeBases(adminOwnedItems, agentPreset.agentKey);
-    const matchedItems = getAgentMatchedKnowledgeBases(items, agentPreset.agentKey);
-    const recommendedKbId =
-      matchedAdminItems[0]?.id ||
-      (adminOwnedItems.length ? adminOwnedItems[0].id : "") ||
-      matchedItems[0]?.id ||
-      items[0].id;
-    const lockKnowledgeBaseForUser = userRole !== "admin";
-
     const resolvedActiveKbId =
-      lockKnowledgeBaseForUser
-        ? recommendedKbId
-        : (preferredKbId && items.some((item) => item.id === preferredKbId) && preferredKbId) ||
-          (activeKbId && items.some((item) => item.id === activeKbId) && activeKbId) ||
-          recommendedKbId;
+      (preferredKbId && items.some((item) => item.id === preferredKbId) && preferredKbId) ||
+      (activeKbId && items.some((item) => item.id === activeKbId) && activeKbId) ||
+      items[0].id;
 
     setActiveKbId(resolvedActiveKbId);
     setEnabledKbIds((prev) => {
-      if (lockKnowledgeBaseForUser) {
-        return resolvedActiveKbId ? [resolvedActiveKbId] : [];
-      }
       const nextEnabledKbIds = prev.filter((id) => items.some((item) => item.id === id));
-      return nextEnabledKbIds.length
-        ? nextEnabledKbIds
-        : resolvedActiveKbId
-          ? [resolvedActiveKbId]
-          : [];
+      return nextEnabledKbIds.length ? nextEnabledKbIds : [resolvedActiveKbId];
     });
   }
 
@@ -608,15 +472,15 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!tokenReady) return;
+    if (!tokenReady || !canAccessAdminViews) return;
     runSafely(async () => {
       await refreshKnowledgeBaseList();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenReady, agentPreset.agentKey, userRole]);
+  }, [tokenReady, canAccessAdminViews]);
 
   useEffect(() => {
-    if (!tokenReady) return;
+    if (!tokenReady || !canAccessAdminViews) return;
     if (!activeKbId) {
       setDocs([]);
       setSelectedDocIds([]);
@@ -627,7 +491,7 @@ export default function App() {
       await refreshDocumentList(activeKbId);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeKbId, tokenReady]);
+  }, [activeKbId, tokenReady, canAccessAdminViews]);
 
   const patchChatMessage = (messageId: number, updater: (message: ChatMessage) => ChatMessage) => {
     setChatHistory((prev) => updateMessageById(prev, messageId, updater));
@@ -829,8 +693,42 @@ export default function App() {
       try {
         const data = await getMyAcademicAnalysis(termCode);
         setAcademicData(data);
+        setError(`学业分析已更新：${data.term.term_name}，风险等级 ${data.risk_level}`);
       } finally {
         setAcademicLoading(false);
+      }
+    });
+  };
+
+  const runRetrievalDebug = () => {
+    const fallbackQuery = [...chatHistory]
+      .reverse()
+      .find((item) => item.role === "user" && item.content.trim())
+      ?.content.trim();
+    const queryText = question.trim() || fallbackQuery || "";
+    if (!queryText) {
+      setError("请先输入问题，或先发送一条消息后再做检索调试");
+      return;
+    }
+
+    runSafely(async () => {
+      const data = await retrievalDebug({
+        query: queryText,
+        kb_ids: enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : undefined,
+        document_ids: enabledDocIds,
+        top_k: sessionConfig.retrieval_top_k,
+        score_threshold: sessionConfig.score_threshold,
+        fusion_mode: sessionConfig.fusion_mode,
+        alpha: sessionConfig.alpha
+      });
+      setDebugJson(JSON.stringify(data, null, 2));
+      const topCount = Array.isArray((data as { top_k_results?: unknown[] }).top_k_results)
+        ? ((data as { top_k_results?: unknown[] }).top_k_results || []).length
+        : 0;
+      if (canAccessAdminViews) {
+        setError(`检索调试已完成，命中 Top-K ${topCount} 条，请在右侧诊断模块查看。`);
+      } else {
+        setError(`检索调试已完成，命中 Top-K ${topCount} 条。`);
       }
     });
   };
@@ -912,54 +810,6 @@ export default function App() {
 
   return (
     <main className={`qw-layout${isRoleLimited ? " qw-layout-limited" : ""}`}>
-      <style>{`
-        /* Chat UI Optimization */
-        .qw-main-chat {
-          background-color: #f7f9fb; /* Light background to make white bubbles pop */
-        }
-        .qw-msg-row {
-          margin-bottom: 20px;
-        }
-        .qw-bubble {
-          border-radius: 12px; /* Semi-rounded corners */
-          padding: 12px 16px;
-          line-height: 1.6;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-          position: relative;
-        }
-
-        /* User Bubble: Solid Blue, White Text */
-        .qw-msg-row.user .qw-bubble {
-          background-color: #0052D9;
-          color: #ffffff;
-          border-top-right-radius: 2px;
-          border: none;
-        }
-        .qw-msg-row.user .qw-bubble a {
-          color: #e3ebff;
-          text-decoration: underline;
-        }
-
-        /* AI Bubble: Solid White, Dark Text */
-        .qw-msg-row.ai .qw-bubble {
-          background-color: #ffffff;
-          color: #1f2329;
-          border: 1px solid #e5e7eb;
-          border-top-left-radius: 2px;
-        }
-
-        /* Thinking Panel Adjustment for new bubble style */
-        .qw-thinking-panel {
-          background: #f5f6f7;
-          border: 1px solid #ebedf0;
-          border-radius: 8px;
-          margin-bottom: 12px;
-          padding: 8px 12px;
-        }
-        .qw-thinking-toggle {
-          color: #646a73;
-        }
-      `}</style>
       <aside className="qw-sidebar">
         <div className="qw-brand">
           <div className="qw-logo">AI</div>
@@ -970,9 +820,15 @@ export default function App() {
         </div>
 
         <div className="qw-sidebar-overview">
-          <article className="qw-sidebar-stat qw-sidebar-stat-muted qw-scope-panel">
+          <article className="qw-sidebar-stat">
+            <span className="qw-kicker">当前知识库</span>
+            <strong>{activeKb?.name || "未选择知识库"}</strong>
+            <p>{enabledKbCount} 个知识库参与当前会话检索</p>
+          </article>
+          <article className="qw-sidebar-stat qw-sidebar-stat-muted">
             <span className="qw-kicker">检索范围</span>
             <strong>{enabledDocCount} 份文档已启用</strong>
+            <p>{totalChunkCount} 个文档片段已载入控制面板</p>
           </article>
         </div>
 
@@ -1352,6 +1208,7 @@ export default function App() {
               </svg>
             </button>
           </div>
+          <p className="qw-input-tip">回答会优先参考当前勾选的知识库和文档范围。</p>
         </div>
       </section>
 
