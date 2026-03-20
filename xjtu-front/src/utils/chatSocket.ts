@@ -32,7 +32,11 @@ export class ChatSocket {
     }
 
     const token = getToken();
-    const url = `ws://127.0.0.1:8000/ws/chat/completions?token=${encodeURIComponent(token)}`;
+    const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const backendHost = window.location.hostname
+      ? `${window.location.hostname}:8000`
+      : "127.0.0.1:8000";
+    const url = `${wsProtocol}://${backendHost}/ws/chat/completions?token=${encodeURIComponent(token)}`;
     this.socket = new WebSocket(url);
 
     this.socket.onopen = () => {

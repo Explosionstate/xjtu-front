@@ -196,6 +196,48 @@ function localizeAcademicRecommendation(item: string): string {
   }
 }
 
+function localizeAcademicFinding(item: string): string {
+  const text = item.trim();
+  if (!text) return text;
+  if (/[\u4e00-\u9fff]/u.test(text)) return text;
+
+  const scoreMatch = text.match(/^Term average score:\s*([+-]?\d+(?:\.\d+)?)\.$/i);
+  if (scoreMatch) {
+    return `学期平均分：${scoreMatch[1]}。`;
+  }
+
+  const gpaMatch = text.match(/^Term GPA:\s*([+-]?\d+(?:\.\d+)?)\.$/i);
+  if (gpaMatch) {
+    return `学期 GPA：${gpaMatch[1]}。`;
+  }
+
+  const rankMatch = text.match(/^Class rank:\s*(\d+)\s*\/\s*(\d+)\.$/i);
+  if (rankMatch) {
+    return `班级排名：第 ${rankMatch[1]} 名 / 共 ${rankMatch[2]} 人。`;
+  }
+
+  const weakCourseMatch = text.match(/^Weak courses detected:\s*(.+)\.$/i);
+  if (weakCourseMatch) {
+    return `识别到薄弱课程：${weakCourseMatch[1]}。`;
+  }
+
+  const gapMatch = text.match(/^Score gap to class average:\s*([+-]?\d+(?:\.\d+)?)\.$/i);
+  if (gapMatch) {
+    return `与班级平均分差距：${gapMatch[1]} 分。`;
+  }
+
+  const warningMatch = text.match(/^Open warning events:\s*(\d+)\.$/i);
+  if (warningMatch) {
+    return `当前未关闭预警事件：${warningMatch[1]} 条。`;
+  }
+
+  if (text === "Insufficient structured data for deeper findings.") {
+    return "当前结构化数据不足，暂时无法产出更深入的关键发现。";
+  }
+
+  return text;
+}
+
 function riskClassName(risk: string | undefined): string {
   const normalized = (risk || "").toLowerCase();
   if (normalized === "critical") return "critical";
@@ -643,13 +685,32 @@ export default function App() {
         onAnswerStart: () => {
           patchChatMessage(assistantMessageId, (message) => ({
             ...message,
-            content: ""
+            content: "",
+            thinking: message.thinking
+              ? {
+                  ...message.thinking,
+                  status: "done",
+                  collapsed: true
+                }
+              : message.thinking
           }));
         },
         onDelta: (text) => {
           patchChatMessage(assistantMessageId, (message) => ({
             ...message,
             content: `${message.content}${text}`
+          }));
+        },
+        onDone: () => {
+          patchChatMessage(assistantMessageId, (message) => ({
+            ...message,
+            thinking: message.thinking
+              ? {
+                  ...message.thinking,
+                  status: "done",
+                  collapsed: true
+                }
+              : message.thinking
           }));
         },
         onError: (message) => {
@@ -1092,7 +1153,9 @@ export default function App() {
                     <h4 className="qw-academic-subtitle">关键发现</h4>
                     {academicData.key_findings.length > 0 ? (
                       <ul className="qw-academic-list qw-academic-bullets">
-                        {academicData.key_findings.map((item, idx) => <li key={`${item}-${idx}`}>{item}</li>)}
+                        {academicData.key_findings.map((item, idx) => (
+                          <li key={`${item}-${idx}`}>{localizeAcademicFinding(item)}</li>
+                        ))}
                       </ul>
                     ) : (
                       <div className="qw-empty-text">暂无关键发现。</div>
