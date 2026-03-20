@@ -633,6 +633,19 @@ export default function App() {
               : message.thinking
           }));
         },
+        onPreview: (text) => {
+          if (!text) return;
+          patchChatMessage(assistantMessageId, (message) => ({
+            ...message,
+            content: text
+          }));
+        },
+        onAnswerStart: () => {
+          patchChatMessage(assistantMessageId, (message) => ({
+            ...message,
+            content: ""
+          }));
+        },
         onDelta: (text) => {
           patchChatMessage(assistantMessageId, (message) => ({
             ...message,

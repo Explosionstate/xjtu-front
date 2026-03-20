@@ -10,6 +10,8 @@ type StreamHandlers = {
     is_real?: boolean;
     done?: boolean;
   }) => void;
+  onPreview?: (text: string) => void;
+  onAnswerStart?: () => void;
   onDelta?: (text: string) => void;
   onDone?: (payload: { sources: Array<{ source_location: string; content: string; score: number }> }) => void;
   onError?: (message: string) => void;
@@ -45,6 +47,10 @@ export class ChatSocket {
         const data = JSON.parse(event.data);
         if (data.type === "meta" && this.handlers.onMeta) this.handlers.onMeta(data);
         if (data.type === "thinking" && this.handlers.onThinking) this.handlers.onThinking(data);
+        if (data.type === "preview" && this.handlers.onPreview) this.handlers.onPreview(data.content || "");
+        if (data.type === "answer" && data.status === "start" && this.handlers.onAnswerStart) {
+          this.handlers.onAnswerStart();
+        }
         if (data.type === "delta" && this.handlers.onDelta) this.handlers.onDelta(data.content || "");
         if (data.type === "done" && this.handlers.onDone) this.handlers.onDone(data);
         if (data.type === "error" && this.handlers.onError) this.handlers.onError(data.detail || "流式连接错误");
