@@ -7,6 +7,7 @@ export async function chatCompletions(payload: {
   kb_ids?: string[];
   document_ids?: string[];
   llm_enabled?: boolean;
+  local_transformer_enabled?: boolean;
   messages: Array<{ role: "user" | "assistant"; content: string }>;
 }): Promise<ChatCompletionResponse> {
   const latestQuestion = [...payload.messages]

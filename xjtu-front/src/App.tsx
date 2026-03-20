@@ -67,6 +67,7 @@ type AgentWorkspacePreset = {
   presetQuestion: string;
   conversationId: string;
   useQwen: boolean;
+  useLocalQwen: boolean;
   useStreamWS: boolean;
   retrievalConfig: RetrievalConfig;
   hasRetrievalPreset: boolean;
@@ -245,6 +246,7 @@ function parseAgentWorkspacePreset(search: string): AgentWorkspacePreset {
     presetQuestion: params.get("preset_question") || "",
     conversationId: params.get("conversation_id") || "",
     useQwen: parseBoolean(params.get("use_qwen"), false),
+    useLocalQwen: parseBoolean(params.get("use_local_qwen"), false),
     useStreamWS: parseBoolean(params.get("use_ws"), false),
     retrievalConfig: {
       retrieval_top_k:
@@ -315,6 +317,7 @@ export default function App() {
   const [logs, setLogs] = useState<ChatLogItem[]>([]);
   const [runtimeJson, setRuntimeJson] = useState("");
   const [useQwen, setUseQwen] = useState(agentPreset.useQwen);
+  const [useLocalQwen, setUseLocalQwen] = useState(agentPreset.useLocalQwen);
   const [useStreamWS, setUseStreamWS] = useState(agentPreset.useStreamWS);
 
   const [sessionConfig, setSessionConfig] = useState<RetrievalConfig>(agentPreset.retrievalConfig);
@@ -650,6 +653,7 @@ export default function App() {
               kb_ids: enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : undefined,
               document_ids: enabledDocIds,
               llm_enabled: useQwen,
+              local_transformer_enabled: useLocalQwen,
             messages: [{ role: "user", content: currentQuestion }]
           });
         } catch (e) {
@@ -667,6 +671,7 @@ export default function App() {
           kb_ids: enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : undefined,
           document_ids: enabledDocIds,
           llm_enabled: useQwen,
+          local_transformer_enabled: useLocalQwen,
           conversation_id: conversationId,
           messages: [{ role: "user", content: currentQuestion }]
         });
@@ -1169,7 +1174,16 @@ export default function App() {
             <label className="qw-toggle">
               <input type="checkbox" checked={useQwen} onChange={(e) => setUseQwen(e.target.checked)} />
               <div className="qw-toggle-track"></div>
-              <span>启用 Qwen 生成增强</span>
+              <span>启用 Qwen3.5-Plus</span>
+            </label>
+            <label className="qw-toggle">
+              <input
+                type="checkbox"
+                checked={useLocalQwen}
+                onChange={(e) => setUseLocalQwen(e.target.checked)}
+              />
+              <div className="qw-toggle-track"></div>
+              <span>启用本地 Qwen</span>
             </label>
             <label className="qw-toggle">
               <input type="checkbox" checked={useStreamWS} onChange={(e) => setUseStreamWS(e.target.checked)} />
