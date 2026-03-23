@@ -20,7 +20,7 @@ export async function chatCompletions(payload: {
     isStudentGrowth && /学业分析|学习分析|成绩分析|学情分析/.test(latestQuestion);
 
   const { data } = await http.post<ChatCompletionResponse>("/chat/completions", payload, {
-    timeout: isAcademicAnalysis ? 120000 : 60000
+    timeout: 120000
   });
   return data;
 }
