@@ -426,12 +426,34 @@ export default function App() {
     () => kbs.find((item) => item.id === activeKbId) || null,
     [kbs, activeKbId]
   );
-  const enabledKbCount = enabledKbIds.length;
+  const scopedKbIds = useMemo(
+    () => (enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : []),
+    [enabledKbIds, activeKbId]
+  );
+  const enabledKbCount = scopedKbIds.length;
   const enabledDocCount = enabledDocIds.length;
+  const scopedKbDocumentCount = useMemo(() => {
+    if (!scopedKbIds.length) return 0;
+    const kbDocCountMap = new Map(kbs.map((item) => [item.id, Number(item.document_count) || 0]));
+    return scopedKbIds.reduce((sum, kbId) => sum + (kbDocCountMap.get(kbId) || 0), 0);
+  }, [kbs, scopedKbIds]);
+  const effectiveDocScopeCount = enabledDocCount > 0 ? enabledDocCount : scopedKbDocumentCount;
+  const docScopeSummaryText =
+    enabledDocCount > 0
+      ? `${enabledDocCount} 份文档已启用`
+      : effectiveDocScopeCount > 0
+        ? `未筛选文档（默认检索全部 ${effectiveDocScopeCount} 份）`
+        : "0 份文档已启用";
   const totalChunkCount = useMemo(
     () => docs.reduce((sum, doc) => sum + (Number(doc.chunk_count) || 0), 0),
     [docs]
   );
+  const chunkScopeSummaryText =
+    totalChunkCount > 0
+      ? `${totalChunkCount} 个文档片段已载入控制面板`
+      : effectiveDocScopeCount > 0
+        ? "文档片段统计尚未载入控制面板"
+        : "0 个文档片段已载入控制面板";
   const classComparison = useMemo(
     () => academicData?.cohort_comparison.find((item) => item.scope_type === "class") || null,
     [academicData]
@@ -614,15 +636,15 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!tokenReady || !canAccessAdminViews) return;
+    if (!tokenReady) return;
     runSafely(async () => {
       await refreshKnowledgeBaseList();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenReady, canAccessAdminViews]);
+  }, [tokenReady]);
 
   useEffect(() => {
-    if (!tokenReady || !canAccessAdminViews) return;
+    if (!tokenReady) return;
     if (!activeKbId) {
       setDocs([]);
       setSelectedDocIds([]);
@@ -633,7 +655,7 @@ export default function App() {
       await refreshDocumentList(activeKbId);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeKbId, tokenReady, canAccessAdminViews]);
+  }, [activeKbId, tokenReady]);
 
   const patchChatMessage = (messageId: number, updater: (message: ChatMessage) => ChatMessage) => {
     setChatHistory((prev) => updateMessageById(prev, messageId, updater));
@@ -837,7 +859,7 @@ export default function App() {
             socket.send({
               conversation_id: conversationId,
               agent_key: agentPreset.agentKey || undefined,
-              kb_ids: enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : undefined,
+              kb_ids: scopedKbIds.length ? scopedKbIds : undefined,
               document_ids: enabledDocIds,
               llm_enabled: useQwen,
               local_transformer_enabled: useLocalQwen,
@@ -856,7 +878,7 @@ export default function App() {
       try {
         const data = await chatCompletions({
           agent_key: agentPreset.agentKey || undefined,
-          kb_ids: enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : undefined,
+          kb_ids: scopedKbIds.length ? scopedKbIds : undefined,
           document_ids: enabledDocIds,
           llm_enabled: useQwen,
           local_transformer_enabled: useLocalQwen,
@@ -937,7 +959,7 @@ export default function App() {
     runSafely(async () => {
       const data = await retrievalDebug({
         query: queryText,
-        kb_ids: enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : undefined,
+        kb_ids: scopedKbIds.length ? scopedKbIds : undefined,
         document_ids: enabledDocIds,
         top_k: sessionConfig.retrieval_top_k,
         score_threshold: sessionConfig.score_threshold,
@@ -1050,8 +1072,8 @@ export default function App() {
           </article>
           <article className="qw-sidebar-stat qw-sidebar-stat-muted">
             <span className="qw-kicker">检索范围</span>
-            <strong>{enabledDocCount} 份文档已启用</strong>
-            <p>{totalChunkCount} 个文档片段已载入控制面板</p>
+            <strong>{docScopeSummaryText}</strong>
+            <p>{chunkScopeSummaryText}</p>
           </article>
         </div>
 
@@ -1118,7 +1140,7 @@ export default function App() {
             </div>
             <div className="qw-header-chip">
               <span>当前检索范围</span>
-              <strong>{enabledKbCount} 个知识库 / {enabledDocCount} 份文档</strong>
+              <strong>{enabledKbCount} 个知识库 / {docScopeSummaryText}</strong>
             </div>
 
             <div className="qw-header-chip">
@@ -1417,7 +1439,7 @@ export default function App() {
               onClick={() => runSafely(async () => {
                 const data = await retrievalDebug({
                   query: question,
-                  kb_ids: enabledKbIds.length ? enabledKbIds : activeKbId ? [activeKbId] : undefined,
+                  kb_ids: scopedKbIds.length ? scopedKbIds : undefined,
                   document_ids: enabledDocIds,
                   top_k: sessionConfig.retrieval_top_k,
                   score_threshold: sessionConfig.score_threshold,
