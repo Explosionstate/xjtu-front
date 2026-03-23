@@ -1,12 +1,48 @@
 import axios, { AxiosError } from "axios";
 import { clearToken, getToken } from "../utils/auth";
 
-const baseURL = "http://127.0.0.1:8000";
+const envBaseURL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+const baseURL = (envBaseURL && envBaseURL.length > 0 ? envBaseURL : "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 export const http = axios.create({
   baseURL,
   timeout: 60000
 });
+
+type ApiEnvelope<T = unknown> = {
+  status?: boolean;
+  code?: number;
+  message?: string;
+  data?: T;
+  detail?: unknown;
+};
+
+function isApiEnvelope(payload: unknown): payload is ApiEnvelope {
+  if (!payload || typeof payload !== "object") return false;
+  const value = payload as Record<string, unknown>;
+  return (
+    Object.prototype.hasOwnProperty.call(value, "status") &&
+    Object.prototype.hasOwnProperty.call(value, "code") &&
+    Object.prototype.hasOwnProperty.call(value, "data")
+  );
+}
+
+function normalizeMessage(raw: unknown): string {
+  if (typeof raw === "string" && raw.trim()) return raw.trim();
+
+  if (Array.isArray(raw) && raw.length > 0) {
+    const first = raw[0] as Record<string, unknown>;
+    if (typeof first?.msg === "string" && first.msg.trim()) return first.msg.trim();
+  }
+
+  if (raw && typeof raw === "object") {
+    const value = raw as Record<string, unknown>;
+    if (typeof value.detail === "string" && value.detail.trim()) return value.detail.trim();
+    if (typeof value.message === "string" && value.message.trim()) return value.message.trim();
+  }
+
+  return "";
+}
 
 http.interceptors.request.use((config) => {
   const token = getToken();
@@ -17,7 +53,25 @@ http.interceptors.request.use((config) => {
 });
 
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const payload = response.data as unknown;
+    if (!isApiEnvelope(payload)) return response;
+
+    const success = Boolean(payload.status) && Number(payload.code ?? 0) === 0;
+    if (success) {
+      return {
+        ...response,
+        data: payload.data
+      };
+    }
+
+    if (Number(payload.code) === 70005) {
+      clearToken();
+    }
+    const message =
+      normalizeMessage(payload.message) || normalizeMessage(payload.detail) || "请求失败";
+    return Promise.reject(new Error(message));
+  },
   (error: AxiosError<{ detail?: string }>) => {
     if (error.response?.status === 401) {
       clearToken();
@@ -28,8 +82,19 @@ http.interceptors.response.use(
 
 export function normalizeError(error: unknown): Error {
   if (axios.isAxiosError(error)) {
-    const detail = error.response?.data?.detail;
-    return new Error(detail || error.message || "请求失败");
+    const responseData = error.response?.data as unknown;
+    if (isApiEnvelope(responseData)) {
+      if (Number(responseData.code) === 70005) {
+        clearToken();
+      }
+      const wrappedMessage =
+        normalizeMessage(responseData.message) || normalizeMessage(responseData.detail);
+      return new Error(wrappedMessage || error.message || "请求失败");
+    }
+    const dataObject = responseData as Record<string, unknown> | undefined;
+    const detail = normalizeMessage(dataObject?.detail);
+    const message = normalizeMessage(dataObject?.message);
+    return new Error(detail || message || error.message || "请求失败");
   }
   if (error instanceof Error) return error;
   return new Error("未知错误");

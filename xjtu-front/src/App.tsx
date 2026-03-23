@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import type { ReactNode } from "react";
 import { getMyAcademicAnalysis } from "./api/academic";
+import { listAgentProfiles } from "./api/agents";
 
 import { me, ssoExchange } from "./api/auth";
 import { chatCompletions, retrievalDebug } from "./api/chat";
@@ -21,7 +22,8 @@ import type {
   ChatLogItem,
   ChatThinking as ApiChatThinking,
   DocumentItem,
-  KnowledgeBaseItem
+  KnowledgeBaseItem,
+  SourceItem
 } from "./types/api";
 import { getToken, setToken } from "./utils/auth";
 import { ChatSocket } from "./utils/chatSocket";
@@ -39,6 +41,7 @@ const defaultConfig: RetrievalConfig = {
 };
 
 const THINKING_REVEAL_DELAY_MS = 0;
+const MAX_RENDER_MESSAGES = 120;
 
 type AssistantThinkingState = {
   title: string;
@@ -54,6 +57,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   thinking?: AssistantThinkingState;
+  sources?: SourceItem[];
 };
 
 type UserRole = "admin" | "student" | "teacher" | "unknown";
@@ -114,7 +118,13 @@ function updateMessageById(
   messageId: number,
   updater: (message: ChatMessage) => ChatMessage
 ) {
-  return messages.map((message) => (message.id === messageId ? updater(message) : message));
+  const index = messages.findIndex((message) => message.id === messageId);
+  if (index < 0) return messages;
+  const updated = updater(messages[index]);
+  if (updated === messages[index]) return messages;
+  const next = messages.slice();
+  next[index] = updated;
+  return next;
 }
 
 function getThinkingLabel(thinking: AssistantThinkingState) {
@@ -269,6 +279,25 @@ function scopeLabel(scopeType: string): string {
   }
 }
 
+function normalizeSourceItems(raw: unknown): SourceItem[] {
+  if (!Array.isArray(raw)) return [];
+  const items: SourceItem[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const sourceLocation = typeof row.source_location === "string" ? row.source_location : "";
+    const content = typeof row.content === "string" ? row.content : "";
+    const scoreValue = Number(row.score);
+    if (!sourceLocation || !content) continue;
+    items.push({
+      source_location: sourceLocation,
+      content,
+      score: Number.isFinite(scoreValue) ? scoreValue : 0
+    });
+  }
+  return items;
+}
+
 function parseAgentWorkspacePreset(search: string): AgentWorkspacePreset {
   const params = new URLSearchParams(search);
   const topK = parseNumber(params.get("retrieval_top_k"));
@@ -292,7 +321,7 @@ function parseAgentWorkspacePreset(search: string): AgentWorkspacePreset {
     useStreamWS: parseBoolean(params.get("use_ws"), false),
     retrievalConfig: {
       retrieval_top_k:
-        topK === null ? defaultConfig.retrieval_top_k : Math.max(1, Math.min(50, Math.round(topK))),
+        topK === null ? defaultConfig.retrieval_top_k : Math.max(1, Math.min(20, Math.round(topK))),
       score_threshold:
         threshold === null ? defaultConfig.score_threshold : Math.max(0, Math.min(1, threshold)),
       fusion_mode: fusionMode || defaultConfig.fusion_mode,
@@ -316,7 +345,7 @@ function loadLocalRetrievalConfig(role: UserRole, scope: string): RetrievalConfi
     const parsed = JSON.parse(raw) as Partial<RetrievalConfig>;
     if (!parsed || typeof parsed !== "object") return null;
     return {
-      retrieval_top_k: Math.max(1, Math.min(50, Number(parsed.retrieval_top_k || defaultConfig.retrieval_top_k))),
+      retrieval_top_k: Math.max(1, Math.min(20, Number(parsed.retrieval_top_k || defaultConfig.retrieval_top_k))),
       score_threshold: Math.max(0, Math.min(1, Number(parsed.score_threshold || defaultConfig.score_threshold))),
       fusion_mode: typeof parsed.fusion_mode === "string" ? parsed.fusion_mode : defaultConfig.fusion_mode,
       alpha: Math.max(0, Math.min(1, Number(parsed.alpha || defaultConfig.alpha)))
@@ -340,6 +369,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [tokenReady, setTokenReady] = useState(Boolean(getToken()));
   const [userRole, setUserRole] = useState<UserRole>("unknown");
+  const [agentProfileCount, setAgentProfileCount] = useState(0);
 
   const [kbs, setKbs] = useState<KnowledgeBaseItem[]>([]);
   const [kbName, setKbName] = useState("演示知识库");
@@ -361,6 +391,7 @@ export default function App() {
   const [useQwen, setUseQwen] = useState(agentPreset.useQwen);
   const [useLocalQwen, setUseLocalQwen] = useState(agentPreset.useLocalQwen);
   const [useStreamWS, setUseStreamWS] = useState(agentPreset.useStreamWS);
+  const [sending, setSending] = useState(false);
 
   const [sessionConfig, setSessionConfig] = useState<RetrievalConfig>(agentPreset.retrievalConfig);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -377,6 +408,10 @@ export default function App() {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   const thinkingTimerIdsRef = useRef<number[]>([]);
+  const streamDeltaTimerRef = useRef<number | null>(null);
+  const streamDeltaMessageIdRef = useRef<number | null>(null);
+  const streamDeltaBufferRef = useRef("");
+  const scrollRafRef = useRef<number | null>(null);
   const retrievalPresetAppliedRef = useRef(false);
   const retrievalScope = useMemo(
     () => agentPreset.agentKey || agentPreset.entry || "default",
@@ -425,15 +460,38 @@ export default function App() {
   const secondaryHintText = "根据知识库解释某个技术概念";
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
+    if (scrollRafRef.current !== null) return;
+    scrollRafRef.current = window.requestAnimationFrame(() => {
+      scrollRafRef.current = null;
+      chatEndRef.current?.scrollIntoView({ behavior: sending ? "auto" : "smooth" });
+    });
+  }, [chatHistory, sending]);
 
   useEffect(() => () => {
     thinkingTimerIdsRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    if (streamDeltaTimerRef.current !== null) {
+      window.clearTimeout(streamDeltaTimerRef.current);
+      streamDeltaTimerRef.current = null;
+    }
+    if (scrollRafRef.current !== null) {
+      window.cancelAnimationFrame(scrollRafRef.current);
+      scrollRafRef.current = null;
+    }
+    streamDeltaBufferRef.current = "";
+    streamDeltaMessageIdRef.current = null;
+    socket.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!tokenReady || !useStreamWS) {
+      socket.disconnect();
+      return;
+    }
+    socket.connect({});
+  }, [tokenReady, useStreamWS]);
+
   async function runSafely(task: () => Promise<void>) {
-    setError("");
+    setError((prev) => (prev ? "" : prev));
     try {
       await task();
     } catch (e) {
@@ -510,6 +568,19 @@ export default function App() {
   }, [currentPage, isRoleLimited]);
 
   useEffect(() => {
+    if (!tokenReady) return;
+    runSafely(async () => {
+      const catalog = await listAgentProfiles();
+      const total = Number(catalog?.total || catalog?.items?.length || 0);
+      setAgentProfileCount(total);
+      if (total > 0 && total < 6) {
+        setError(`后端智能体配置不完整：当前仅加载 ${total} 个智能体`);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokenReady]);
+
+  useEffect(() => {
     if (agentPreset.agentTitle) {
       document.title = `${agentPreset.agentTitle} - 西交 AI 智能体`;
     }
@@ -568,6 +639,31 @@ export default function App() {
     setChatHistory((prev) => updateMessageById(prev, messageId, updater));
   };
 
+  const flushStreamDelta = () => {
+    const messageId = streamDeltaMessageIdRef.current;
+    const pending = streamDeltaBufferRef.current;
+    if (!messageId || !pending) return;
+    streamDeltaBufferRef.current = "";
+    patchChatMessage(messageId, (message) => ({
+      ...message,
+      content: `${message.content}${pending}`
+    }));
+  };
+
+  const enqueueStreamDelta = (messageId: number, text: string) => {
+    if (!text) return;
+    if (streamDeltaMessageIdRef.current !== messageId) {
+      flushStreamDelta();
+      streamDeltaMessageIdRef.current = messageId;
+    }
+    streamDeltaBufferRef.current = `${streamDeltaBufferRef.current}${text}`;
+    if (streamDeltaTimerRef.current !== null) return;
+    streamDeltaTimerRef.current = window.setTimeout(() => {
+      streamDeltaTimerRef.current = null;
+      flushStreamDelta();
+    }, 24);
+  };
+
   const scheduleMessageUpdate = (task: () => void, delayMs: number) => {
     const timerId = window.setTimeout(() => {
       thinkingTimerIdsRef.current = thinkingTimerIdsRef.current.filter((id) => id !== timerId);
@@ -607,17 +703,26 @@ export default function App() {
   };
 
   const handleSendMessage = () => {
-    if (!question.trim()) return;
+    if (!question.trim() || sending) return;
     const currentQuestion = question.trim();
     const userMessageId = createMessageId();
     const assistantMessageId = createMessageId();
     setQuestion("");
+    setSending(true);
+    streamDeltaMessageIdRef.current = assistantMessageId;
+    streamDeltaBufferRef.current = "";
+    const userMessage: ChatMessage = {
+      id: userMessageId,
+      role: "user",
+      content: currentQuestion
+    };
+    const assistantPlaceholder = createAssistantPlaceholder(assistantMessageId);
 
     setChatHistory((prev) => [
       ...prev,
-      { id: userMessageId, role: "user", content: currentQuestion },
-      createAssistantPlaceholder(assistantMessageId)
-    ]);
+      userMessage,
+      assistantPlaceholder
+    ].slice(-MAX_RENDER_MESSAGES));
 
     if (useStreamWS) {
       socket.connect({
@@ -683,6 +788,8 @@ export default function App() {
           }));
         },
         onAnswerStart: () => {
+          flushStreamDelta();
+          streamDeltaBufferRef.current = "";
           patchChatMessage(assistantMessageId, (message) => ({
             ...message,
             content: "",
@@ -696,14 +803,14 @@ export default function App() {
           }));
         },
         onDelta: (text) => {
-          patchChatMessage(assistantMessageId, (message) => ({
-            ...message,
-            content: `${message.content}${text}`
-          }));
+          enqueueStreamDelta(assistantMessageId, text);
         },
-        onDone: () => {
+        onDone: (payload) => {
+          flushStreamDelta();
+          const sourceItems = normalizeSourceItems(payload?.sources);
           patchChatMessage(assistantMessageId, (message) => ({
             ...message,
+            sources: sourceItems,
             thinking: message.thinking
               ? {
                   ...message.thinking,
@@ -712,10 +819,16 @@ export default function App() {
                 }
               : message.thinking
           }));
+          setSending(false);
         },
         onError: (message) => {
+          flushStreamDelta();
           setError(message);
           markAssistantError(assistantMessageId, message);
+          setSending(false);
+        },
+        onClose: () => {
+          setSending(false);
         }
       });
 
@@ -732,6 +845,7 @@ export default function App() {
           });
         } catch (e) {
           markAssistantError(assistantMessageId, (e as Error).message || "发送失败");
+          setSending(false);
           throw e;
         }
       });
@@ -749,12 +863,14 @@ export default function App() {
           conversation_id: conversationId,
           messages: [{ role: "user", content: currentQuestion }]
         });
-        const resultText = data.choices[0].message.content;
+        const resultText = data.choices?.[0]?.message?.content || "";
+        const sourceItems = normalizeSourceItems(data.sources);
         const thinkingState = createThinkingState(data.thinking);
         setConversationId(data.conversation_id);
         patchChatMessage(assistantMessageId, (message) => ({
           ...message,
           content: "",
+          sources: sourceItems,
           thinking: {
             ...thinkingState,
             collapsed: false,
@@ -783,6 +899,8 @@ export default function App() {
       } catch (e) {
         markAssistantError(assistantMessageId, (e as Error).message || "请求失败");
         throw e;
+      } finally {
+        setSending(false);
       }
     });
   };
@@ -1002,7 +1120,11 @@ export default function App() {
               <span>当前检索范围</span>
               <strong>{enabledKbCount} 个知识库 / {enabledDocCount} 份文档</strong>
             </div>
-          </div>
+
+            <div className="qw-header-chip">
+              <span>已接入智能体</span>
+              <strong>{agentProfileCount > 0 ? `${agentProfileCount} 个` : "--"}</strong>
+            </div>          </div>
         </header>
 
         {error && <div className="qw-toast-error">{error}</div>}
@@ -1227,7 +1349,24 @@ export default function App() {
                     )}
                     {msg.role === "assistant" ? (
                       msg.content ? (
-                        <div className="qw-answer-text">{msg.content}</div>
+                        <>
+                          <div className="qw-answer-text">{msg.content}</div>
+                          {msg.sources && msg.sources.length > 0 && (
+                            <div className="qw-answer-sources">
+                              <div className="qw-answer-sources-title">参考来源</div>
+                              <ul>
+                                {msg.sources.slice(0, 3).map((source, index) => (
+                                  <li key={`${msg.id}-source-${index}`}>
+                                    <span className="qw-answer-source-name">{source.source_location}</span>
+                                    <span className="qw-answer-source-score">
+                                      相关度 {Number(source.score || 0).toFixed(3)}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </>
                       ) : msg.thinking?.status === "done" ? (
                         <span className="qw-answer-loading">正在整理回答...</span>
                       ) : (
@@ -1307,6 +1446,7 @@ export default function App() {
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onKeyDown={(e) => {
+                if (sending) return;
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   handleSendMessage();
@@ -1314,10 +1454,11 @@ export default function App() {
               }}
               placeholder="请输入问题，Enter 发送，Shift + Enter 换行"
               rows={1}
+              disabled={sending}
             />
             <button
               className="qw-send-btn"
-              disabled={!question.trim()}
+              disabled={!question.trim() || sending}
               onClick={handleSendMessage}
               aria-label="发送消息"
             >
@@ -1592,6 +1733,7 @@ export default function App() {
                   >
                     <option value="weighted">weighted</option>
                     <option value="rrf">rrf</option>
+                    <option value="simple">simple (compat)</option>
                   </select>
                   <span>融合权重</span>
                   <input

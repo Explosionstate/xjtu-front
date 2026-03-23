@@ -32,11 +32,16 @@ export class ChatSocket {
     }
 
     const token = getToken();
-    const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const backendHost = window.location.hostname
-      ? `${window.location.hostname}:8000`
-      : "127.0.0.1:8000";
-    const url = `${wsProtocol}://${backendHost}/ws/chat/completions?token=${encodeURIComponent(token)}`;
+    const envBaseURL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim();
+    const resolvedBase = (envBaseURL && envBaseURL.length > 0)
+      ? envBaseURL
+      : "http://127.0.0.1:8000";
+    const wsUrl = new URL(resolvedBase);
+    wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+    const basePath = wsUrl.pathname.replace(/\/+$/, "");
+    wsUrl.pathname = `${basePath}/ws/chat/completions`.replace(/\/{2,}/g, "/");
+    wsUrl.search = `token=${encodeURIComponent(token)}`;
+    const url = wsUrl.toString();
     this.socket = new WebSocket(url);
 
     this.socket.onopen = () => {

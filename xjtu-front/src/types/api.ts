@@ -3,6 +3,13 @@ export interface TokenResponse {
   token_type: string;
 }
 
+export interface ApiEnvelope<T> {
+  status: boolean;
+  code: number;
+  message: string;
+  data: T;
+}
+
 export interface SsoExchangeResponse {
   access_token: string;
   token_type: string;
