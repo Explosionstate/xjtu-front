@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import type { ReactNode } from "react";
 import { getMyAcademicAnalysis } from "./api/academic";
-import { listAgentProfiles } from "./api/agents";
 
 import { me, ssoExchange } from "./api/auth";
 import { chatCompletions, retrievalDebug } from "./api/chat";
@@ -369,7 +368,6 @@ export default function App() {
   const [error, setError] = useState("");
   const [tokenReady, setTokenReady] = useState(Boolean(getToken()));
   const [userRole, setUserRole] = useState<UserRole>("unknown");
-  const [agentProfileCount, setAgentProfileCount] = useState(0);
 
   const [kbs, setKbs] = useState<KnowledgeBaseItem[]>([]);
   const [kbName, setKbName] = useState("演示知识库");
@@ -442,7 +440,7 @@ export default function App() {
     enabledDocCount > 0
       ? `${enabledDocCount} 份文档已启用`
       : effectiveDocScopeCount > 0
-        ? `未筛选文档（默认检索全部 ${effectiveDocScopeCount} 份）`
+        ? `全部 ${effectiveDocScopeCount} 份文档`
         : "0 份文档已启用";
   const totalChunkCount = useMemo(
     () => docs.reduce((sum, doc) => sum + (Number(doc.chunk_count) || 0), 0),
@@ -590,19 +588,6 @@ export default function App() {
   }, [currentPage, isRoleLimited]);
 
   useEffect(() => {
-    if (!tokenReady) return;
-    runSafely(async () => {
-      const catalog = await listAgentProfiles();
-      const total = Number(catalog?.total || catalog?.items?.length || 0);
-      setAgentProfileCount(total);
-      if (total > 0 && total < 6) {
-        setError(`后端智能体配置不完整：当前仅加载 ${total} 个智能体`);
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenReady]);
-
-  useEffect(() => {
     if (agentPreset.agentTitle) {
       document.title = `${agentPreset.agentTitle} - 西交 AI 智能体`;
     }
@@ -678,12 +663,17 @@ export default function App() {
       flushStreamDelta();
       streamDeltaMessageIdRef.current = messageId;
     }
+    const isFirstChunk = streamDeltaBufferRef.current.length === 0;
     streamDeltaBufferRef.current = `${streamDeltaBufferRef.current}${text}`;
+    if (isFirstChunk) {
+      flushStreamDelta();
+      return;
+    }
     if (streamDeltaTimerRef.current !== null) return;
     streamDeltaTimerRef.current = window.setTimeout(() => {
       streamDeltaTimerRef.current = null;
       flushStreamDelta();
-    }, 24);
+    }, 12);
   };
 
   const scheduleMessageUpdate = (task: () => void, delayMs: number) => {
@@ -1142,11 +1132,7 @@ export default function App() {
               <span>当前检索范围</span>
               <strong>{enabledKbCount} 个知识库 / {docScopeSummaryText}</strong>
             </div>
-
-            <div className="qw-header-chip">
-              <span>已接入智能体</span>
-              <strong>{agentProfileCount > 0 ? `${agentProfileCount} 个` : "--"}</strong>
-            </div>          </div>
+          </div>
         </header>
 
         {error && <div className="qw-toast-error">{error}</div>}
