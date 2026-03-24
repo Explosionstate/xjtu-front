@@ -103,7 +103,7 @@ function createAssistantPlaceholder(id: number): ChatMessage {
       title: "思考中",
       content: "",
       status: "pending",
-      collapsed: false,
+      collapsed: true,
       kind: "summary",
       isReal: false
     }
@@ -111,11 +111,12 @@ function createAssistantPlaceholder(id: number): ChatMessage {
 }
 
 function createThinkingState(thinking?: ApiChatThinking): AssistantThinkingState {
+  const defaultCollapsed = thinking?.kind === "reasoning" ? false : true;
   return {
     title: thinking?.title || "处理摘要",
     content: thinking?.content || "",
     status: thinking?.content ? "done" : "pending",
-    collapsed: Boolean(thinking?.collapsed),
+    collapsed: thinking?.collapsed ?? defaultCollapsed,
     kind: thinking?.kind || "summary",
     isReal: Boolean(thinking?.is_real)
   };
@@ -169,16 +170,96 @@ function renderInlineBoldMarkdown(line: string, lineKey: string): ReactNode[] {
 function renderMessageMarkdown(content: string): ReactNode {
   const normalized = (content || "").replace(/\r\n/g, "\n");
   const lines = normalized.split("\n");
-  const output: ReactNode[] = [];
+  const blocks: ReactNode[] = [];
+  let index = 0;
 
-  lines.forEach((line, index) => {
-    output.push(...renderInlineBoldMarkdown(line, `line-${index}`));
-    if (index < lines.length - 1) {
-      output.push(<br key={`line-break-${index}`} />);
+  const isHeading = (line: string) => /^#{1,6}\s+/.test(line.trim());
+  const isBullet = (line: string) => /^[-*]\s+/.test(line.trim());
+  const isOrdered = (line: string) => /^\d+[\.\)]\s+/.test(line.trim());
+
+  while (index < lines.length) {
+    const rawLine = lines[index] || "";
+    const line = rawLine.trim();
+    if (!line) {
+      index += 1;
+      continue;
     }
-  });
 
-  return output;
+    if (isHeading(line)) {
+      const headingText = line.replace(/^#{1,6}\s+/, "").trim();
+      blocks.push(
+        <h4 key={`md-heading-${index}`} className="qw-answer-heading">
+          {renderInlineBoldMarkdown(headingText, `heading-${index}`)}
+        </h4>
+      );
+      index += 1;
+      continue;
+    }
+
+    if (isBullet(line)) {
+      const items: ReactNode[] = [];
+      let bulletIndex = 0;
+      while (index < lines.length && isBullet(lines[index] || "")) {
+        const itemText = (lines[index] || "").trim().replace(/^[-*]\s+/, "");
+        items.push(
+          <li key={`md-ul-${index}-${bulletIndex}`}>
+            {renderInlineBoldMarkdown(itemText, `ul-${index}-${bulletIndex}`)}
+          </li>
+        );
+        index += 1;
+        bulletIndex += 1;
+      }
+      blocks.push(
+        <ul key={`md-ul-block-${index}-${bulletIndex}`} className="qw-answer-list">
+          {items}
+        </ul>
+      );
+      continue;
+    }
+
+    if (isOrdered(line)) {
+      const items: ReactNode[] = [];
+      let orderedIndex = 0;
+      while (index < lines.length && isOrdered(lines[index] || "")) {
+        const itemText = (lines[index] || "").trim().replace(/^\d+[\.\)]\s+/, "");
+        items.push(
+          <li key={`md-ol-${index}-${orderedIndex}`}>
+            {renderInlineBoldMarkdown(itemText, `ol-${index}-${orderedIndex}`)}
+          </li>
+        );
+        index += 1;
+        orderedIndex += 1;
+      }
+      blocks.push(
+        <ol key={`md-ol-block-${index}-${orderedIndex}`} className="qw-answer-list">
+          {items}
+        </ol>
+      );
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+    while (
+      index < lines.length &&
+      lines[index] &&
+      !isHeading(lines[index] || "") &&
+      !isBullet(lines[index] || "") &&
+      !isOrdered(lines[index] || "")
+    ) {
+      paragraphLines.push((lines[index] || "").trim());
+      index += 1;
+    }
+    const paragraphText = paragraphLines.join(" ").trim();
+    if (paragraphText) {
+      blocks.push(
+        <p key={`md-paragraph-${index}`} className="qw-answer-paragraph">
+          {renderInlineBoldMarkdown(paragraphText, `paragraph-${index}`)}
+        </p>
+      );
+    }
+  }
+
+  return blocks.length ? blocks : normalized;
 }
 
 function getThinkingLabel(thinking: AssistantThinkingState) {
@@ -335,7 +416,7 @@ function scopeLabel(scopeType: string): string {
 
 function normalizeSourceItems(raw: unknown): SourceItem[] {
   if (!Array.isArray(raw)) return [];
-  const items: SourceItem[] = [];
+  const merged = new Map<string, SourceItem>();
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const row = item as Record<string, unknown>;
@@ -343,13 +424,18 @@ function normalizeSourceItems(raw: unknown): SourceItem[] {
     const content = typeof row.content === "string" ? row.content : "";
     const scoreValue = Number(row.score);
     if (!sourceLocation || !content) continue;
-    items.push({
+    const normalized: SourceItem = {
       source_location: sourceLocation,
       content,
       score: Number.isFinite(scoreValue) ? scoreValue : 0
-    });
+    };
+    const key = sourceLocation.trim().toLowerCase();
+    const existing = merged.get(key);
+    if (!existing || normalized.score > existing.score) {
+      merged.set(key, normalized);
+    }
   }
-  return items;
+  return Array.from(merged.values());
 }
 
 function parseAgentWorkspacePreset(search: string): AgentWorkspacePreset {
@@ -801,6 +887,7 @@ export default function App() {
         onMeta: (meta) => setConversationId(meta.conversation_id),
         onThinking: (thinkingEvent) => {
           if (thinkingEvent.status === "start") {
+            const isRealThinking = Boolean(thinkingEvent.is_real);
             patchChatMessage(assistantMessageId, (message) => ({
               ...message,
               thinking: {
@@ -808,9 +895,9 @@ export default function App() {
                 title: thinkingEvent.title || "思考中",
                 content: thinkingEvent.content || "",
                 status: "pending",
-                collapsed: false,
+                collapsed: isRealThinking ? false : true,
                 kind: thinkingEvent.kind || "summary",
-                isReal: Boolean(thinkingEvent.is_real)
+                isReal: isRealThinking
               }
             }));
             return;
@@ -819,6 +906,9 @@ export default function App() {
           if (thinkingEvent.status === "delta") {
             patchChatMessage(assistantMessageId, (message) => {
               const previousThinking = message.thinking || createThinkingState();
+              const nextIsRealThinking = Boolean(
+                thinkingEvent.is_real ?? previousThinking.isReal
+              );
               return {
                 ...message,
                 thinking: {
@@ -829,9 +919,9 @@ export default function App() {
                       ? thinkingEvent.content || ""
                       : `${previousThinking.content}${thinkingEvent.content || ""}`,
                   status: "streaming",
-                  collapsed: false,
+                  collapsed: nextIsRealThinking ? previousThinking.collapsed : true,
                   kind: thinkingEvent.kind || previousThinking.kind,
-                  isReal: Boolean(thinkingEvent.is_real ?? previousThinking.isReal)
+                  isReal: nextIsRealThinking
                 }
               };
             });
@@ -945,7 +1035,7 @@ export default function App() {
           sources: sourceItems,
           thinking: {
             ...thinkingState,
-            collapsed: false,
+            collapsed: true,
             status: "done"
           }
         }));
@@ -1398,49 +1488,52 @@ export default function App() {
                 <div key={msg.id} className={`qw-msg-row ${msg.role === "assistant" ? "ai" : "user"}`}>
                   {msg.role === "assistant" && <div className="qw-avatar ai">AI</div>}
                   <div className="qw-bubble">
-                    {msg.role === "assistant" && msg.thinking && (
-                      <div className={`qw-thinking-panel ${msg.thinking.collapsed ? "is-collapsed" : ""}`}>
-                        <button
-                          type="button"
-                          className={`qw-thinking-toggle ${msg.thinking.status === "pending" ? "is-disabled" : ""}`}
-                          onClick={() => toggleThinking(msg.id)}
-                          disabled={msg.thinking.status === "pending"}
-                        >
-                          <span className={`qw-thinking-arrow ${msg.thinking.collapsed ? "is-collapsed" : ""}`}>▾</span>
-                          <span className="qw-thinking-label">{getThinkingLabel(msg.thinking)}</span>
-                        </button>
-                        {!msg.thinking.collapsed && (
-                          <div className="qw-thinking-body">
-                            {msg.thinking.content || <span className="qw-typing">AI 正在思考中...</span>}
+                    {msg.role === "assistant" ? (
+                      <>
+                        {msg.content ? (
+                          <>
+                            <div className="qw-answer-text">{renderMessageMarkdown(msg.content)}</div>
+                            {msg.sources && msg.sources.length > 0 && (
+                              <div className="qw-answer-sources">
+                                <div className="qw-answer-sources-title">参考来源</div>
+                                <ul>
+                                  {msg.sources.slice(0, 3).map((source, index) => (
+                                    <li key={`${msg.id}-source-${index}`}>
+                                      <span className="qw-answer-source-name">{source.source_location}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </>
+                        ) : msg.thinking?.status === "done" ? (
+                          <span className="qw-answer-loading">正在整理回答...</span>
+                        ) : (
+                          <span className="qw-typing">AI 正在思考中...</span>
+                        )}
+                        {msg.thinking && (
+                          <div
+                            className={`qw-thinking-panel ${msg.thinking.collapsed ? "is-collapsed" : ""} ${
+                              msg.content ? "has-answer" : ""
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              className={`qw-thinking-toggle ${msg.thinking.status === "pending" ? "is-disabled" : ""}`}
+                              onClick={() => toggleThinking(msg.id)}
+                              disabled={msg.thinking.status === "pending"}
+                            >
+                              <span className={`qw-thinking-arrow ${msg.thinking.collapsed ? "is-collapsed" : ""}`}>▾</span>
+                              <span className="qw-thinking-label">{getThinkingLabel(msg.thinking)}</span>
+                            </button>
+                            {!msg.thinking.collapsed && (
+                              <div className="qw-thinking-body">
+                                {msg.thinking.content || <span className="qw-typing">AI 正在思考中...</span>}
+                              </div>
+                            )}
                           </div>
                         )}
-                      </div>
-                    )}
-                    {msg.role === "assistant" ? (
-                      msg.content ? (
-                        <>
-                          <div className="qw-answer-text">{renderMessageMarkdown(msg.content)}</div>
-                          {msg.sources && msg.sources.length > 0 && (
-                            <div className="qw-answer-sources">
-                              <div className="qw-answer-sources-title">参考来源</div>
-                              <ul>
-                                {msg.sources.slice(0, 3).map((source, index) => (
-                                  <li key={`${msg.id}-source-${index}`}>
-                                    <span className="qw-answer-source-name">{source.source_location}</span>
-                                    <span className="qw-answer-source-score">
-                                      相关度 {Number(source.score || 0).toFixed(3)}
-                                    </span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </>
-                      ) : msg.thinking?.status === "done" ? (
-                        <span className="qw-answer-loading">正在整理回答...</span>
-                      ) : (
-                        !msg.thinking && <span className="qw-typing">AI 正在思考中...</span>
-                      )
+                      </>
                     ) : (
                       msg.content
                     )}

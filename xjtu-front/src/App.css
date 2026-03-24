@@ -910,27 +910,31 @@ textarea {
 }
 
 .qw-thinking-panel {
-  margin-bottom: 10px;
+  margin-top: 10px;
   border-radius: 12px;
   border-top-left-radius: 12px;
   border-top-right-radius: 12px;
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
-  border: 1px solid #d9e2ec;
-  background: #f8fafd;
+  border: 1px solid #e2e8f0;
+  background: #f9fbff;
   overflow: hidden;
+}
+
+.qw-thinking-panel.has-answer {
+  margin-bottom: 0;
 }
 
 .qw-thinking-toggle {
   width: 100%;
   border: none;
   background: transparent;
-  color: #334155;
-  padding: 10px 12px;
+  color: #475569;
+  padding: 9px 12px;
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
@@ -954,17 +958,46 @@ textarea {
 }
 
 .qw-thinking-body {
-  padding: 0 12px 12px 34px;
-  color: #334155;
-  font-size: 14px;
-  line-height: 1.68;
+  padding: 0 12px 11px 34px;
+  color: #526172;
+  font-size: 13px;
+  line-height: 1.65;
   white-space: pre-wrap;
 }
 
 .qw-answer-text {
-  white-space: pre-wrap;
-  line-height: 1.76;
   color: #0f172a;
+}
+
+.qw-answer-text > *:first-child {
+  margin-top: 0;
+}
+
+.qw-answer-text > *:last-child {
+  margin-bottom: 0;
+}
+
+.qw-answer-paragraph {
+  margin: 0 0 10px;
+  line-height: 1.76;
+}
+
+.qw-answer-heading {
+  margin: 4px 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: #0b1324;
+}
+
+.qw-answer-list {
+  margin: 0 0 10px 20px;
+  padding: 0;
+  line-height: 1.72;
+}
+
+.qw-answer-list li + li {
+  margin-top: 4px;
 }
 
 .qw-answer-text strong {
@@ -994,23 +1027,13 @@ textarea {
 }
 
 .qw-answer-sources li {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  display: block;
   font-size: 12px;
   color: #475569;
 }
 
 .qw-answer-source-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 360px;
-}
-
-.qw-answer-source-score {
-  color: #64748b;
-  flex-shrink: 0;
+  word-break: break-all;
 }
 
 .qw-answer-loading,
