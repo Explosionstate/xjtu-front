@@ -27,6 +27,7 @@ export async function chatCompletions(payload: {
 
 export async function retrievalDebug(payload: {
   query: string;
+  agent_key?: string;
   kb_ids?: string[];
   document_ids?: string[];
   top_k?: number;

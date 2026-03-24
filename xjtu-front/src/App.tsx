@@ -81,6 +81,15 @@ type RightPanelSectionState = Record<RightPanelSectionKey, boolean>;
 
 const RETRIEVAL_LOCAL_KEY_PREFIX = "xjtu_retrieval_preset";
 
+const AGENT_BOUND_KB_NAMES: Record<string, string> = {
+  "student-growth": "学生成长助手知识库",
+  "teacher-assistant": "教师助教助手知识库",
+  "counselor-ideology": "辅导员思政助手知识库",
+  "risk-warning": "学情预警助手知识库",
+  "report-assistant": "学情报告助手知识库",
+  "policy-qa": "思政知识问答知识库"
+};
+
 function createMessageId() {
   return Date.now() + Math.floor(Math.random() * 1000);
 }
@@ -569,7 +578,10 @@ export default function App() {
 
   async function refreshKnowledgeBaseList(preferredKbId?: string) {
     const result = await listKnowledgeBases({ limit: 50 });
-    const items = result.items;
+    const boundKbName = AGENT_BOUND_KB_NAMES[agentPreset.agentKey || ""];
+    const items = boundKbName
+      ? result.items.filter((item) => item.name === boundKbName)
+      : result.items;
     setKbs(items);
 
     if (!items.length) {
@@ -997,6 +1009,7 @@ export default function App() {
     runSafely(async () => {
       const data = await retrievalDebug({
         query: queryText,
+        agent_key: agentPreset.agentKey || undefined,
         kb_ids: scopedKbIds.length ? scopedKbIds : undefined,
         document_ids: enabledDocIds,
         top_k: sessionConfig.retrieval_top_k,
@@ -1485,6 +1498,7 @@ export default function App() {
               onClick={() => runSafely(async () => {
                 const data = await retrievalDebug({
                   query: question,
+                  agent_key: agentPreset.agentKey || undefined,
                   kb_ids: scopedKbIds.length ? scopedKbIds : undefined,
                   document_ids: enabledDocIds,
                   top_k: sessionConfig.retrieval_top_k,
