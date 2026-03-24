@@ -90,6 +90,15 @@ const AGENT_BOUND_KB_NAMES: Record<string, string> = {
   "policy-qa": "思政知识问答知识库"
 };
 
+const SPEED_OPTIMIZED_AGENT_KEYS = new Set<string>([
+  "student-growth",
+  "teacher-assistant",
+  "counselor-ideology",
+  "risk-warning",
+  "report-assistant",
+  "policy-qa"
+]);
+
 function createMessageId() {
   return Date.now() + Math.floor(Math.random() * 1000);
 }
@@ -440,6 +449,8 @@ function normalizeSourceItems(raw: unknown): SourceItem[] {
 
 function parseAgentWorkspacePreset(search: string): AgentWorkspacePreset {
   const params = new URLSearchParams(search);
+  const normalizedAgentKey = (params.get("agent_key") || "").trim().toLowerCase();
+  const defaultUseStreamWS = SPEED_OPTIMIZED_AGENT_KEYS.has(normalizedAgentKey);
   const topK = parseNumber(params.get("retrieval_top_k"));
   const threshold = parseNumber(params.get("score_threshold"));
   const alpha = parseNumber(params.get("alpha"));
@@ -458,7 +469,7 @@ function parseAgentWorkspacePreset(search: string): AgentWorkspacePreset {
     conversationId: params.get("conversation_id") || "",
     useQwen: parseBoolean(params.get("use_qwen"), false),
     useLocalQwen: parseBoolean(params.get("use_local_qwen"), false),
-    useStreamWS: parseBoolean(params.get("use_ws"), false),
+    useStreamWS: parseBoolean(params.get("use_ws"), defaultUseStreamWS),
     retrievalConfig: {
       retrieval_top_k:
         topK === null ? defaultConfig.retrieval_top_k : Math.max(1, Math.min(20, Math.round(topK))),
