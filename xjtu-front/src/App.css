@@ -967,6 +967,11 @@ textarea {
   color: #0f172a;
 }
 
+.qw-answer-text strong {
+  font-weight: 700;
+  color: #0b1324;
+}
+
 .qw-answer-sources {
   margin-top: 10px;
   padding-top: 8px;

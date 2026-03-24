@@ -126,6 +126,52 @@ function updateMessageById(
   return next;
 }
 
+function renderInlineBoldMarkdown(line: string, lineKey: string): ReactNode[] {
+  if (!line) return [""];
+  const pattern = /\*\*(.+?)\*\*/g;
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let boldIndex = 0;
+  let match: RegExpExecArray | null = pattern.exec(line);
+
+  while (match) {
+    if (match.index > lastIndex) {
+      nodes.push(line.slice(lastIndex, match.index));
+    }
+    const strongText = (match[1] || "").trim();
+    if (strongText) {
+      nodes.push(
+        <strong key={`${lineKey}-strong-${boldIndex}`}>{strongText}</strong>
+      );
+      boldIndex += 1;
+    } else {
+      nodes.push(match[0]);
+    }
+    lastIndex = match.index + match[0].length;
+    match = pattern.exec(line);
+  }
+
+  if (lastIndex < line.length) {
+    nodes.push(line.slice(lastIndex));
+  }
+  return nodes.length ? nodes : [line];
+}
+
+function renderMessageMarkdown(content: string): ReactNode {
+  const normalized = (content || "").replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
+  const output: ReactNode[] = [];
+
+  lines.forEach((line, index) => {
+    output.push(...renderInlineBoldMarkdown(line, `line-${index}`));
+    if (index < lines.length - 1) {
+      output.push(<br key={`line-break-${index}`} />);
+    }
+  });
+
+  return output;
+}
+
 function getThinkingLabel(thinking: AssistantThinkingState) {
   if (thinking.status === "pending") return "思考中";
   if (thinking.status === "streaming") return thinking.title || "思考过程";
@@ -1360,7 +1406,7 @@ export default function App() {
                     {msg.role === "assistant" ? (
                       msg.content ? (
                         <>
-                          <div className="qw-answer-text">{msg.content}</div>
+                          <div className="qw-answer-text">{renderMessageMarkdown(msg.content)}</div>
                           {msg.sources && msg.sources.length > 0 && (
                             <div className="qw-answer-sources">
                               <div className="qw-answer-sources-title">参考来源</div>
