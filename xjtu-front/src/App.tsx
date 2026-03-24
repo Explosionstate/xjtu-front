@@ -387,7 +387,7 @@ export default function App() {
   const [logs, setLogs] = useState<ChatLogItem[]>([]);
   const [runtimeJson, setRuntimeJson] = useState("");
   const [useQwen, setUseQwen] = useState(agentPreset.useQwen);
-  const [useLocalQwen, setUseLocalQwen] = useState(agentPreset.useLocalQwen);
+  const [useLocalQwen, setUseLocalQwen] = useState(agentPreset.useLocalQwen && !agentPreset.useQwen);
   const [useStreamWS, setUseStreamWS] = useState(agentPreset.useStreamWS);
   const [sending, setSending] = useState(false);
 
@@ -415,6 +415,8 @@ export default function App() {
     () => agentPreset.agentKey || agentPreset.entry || "default",
     [agentPreset.agentKey, agentPreset.entry]
   );
+  const effectiveCloudEnabled = useQwen;
+  const effectiveLocalEnabled = useLocalQwen && !useQwen;
 
   const canOperateDoc = useMemo(() => Boolean(activeKbId), [activeKbId]);
   const isRoleLimited = tokenReady && userRole !== "admin";
@@ -851,8 +853,8 @@ export default function App() {
               agent_key: agentPreset.agentKey || undefined,
               kb_ids: scopedKbIds.length ? scopedKbIds : undefined,
               document_ids: enabledDocIds,
-              llm_enabled: useQwen,
-              local_transformer_enabled: useLocalQwen,
+              llm_enabled: effectiveCloudEnabled,
+              local_transformer_enabled: effectiveLocalEnabled,
             messages: [{ role: "user", content: currentQuestion }]
           });
         } catch (e) {
@@ -870,8 +872,8 @@ export default function App() {
           agent_key: agentPreset.agentKey || undefined,
           kb_ids: scopedKbIds.length ? scopedKbIds : undefined,
           document_ids: enabledDocIds,
-          llm_enabled: useQwen,
-          local_transformer_enabled: useLocalQwen,
+          llm_enabled: effectiveCloudEnabled,
+          local_transformer_enabled: effectiveLocalEnabled,
           conversation_id: conversationId,
           messages: [{ role: "user", content: currentQuestion }]
         });
@@ -1395,7 +1397,15 @@ export default function App() {
         <div className="qw-input-wrapper">
           <div className="qw-input-toolbar">
             <label className="qw-toggle">
-              <input type="checkbox" checked={useQwen} onChange={(e) => setUseQwen(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={useQwen}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setUseQwen(checked);
+                  if (checked) setUseLocalQwen(false);
+                }}
+              />
               <div className="qw-toggle-track"></div>
               <span>启用 Qwen3.5-Plus</span>
             </label>
@@ -1403,7 +1413,11 @@ export default function App() {
               <input
                 type="checkbox"
                 checked={useLocalQwen}
-                onChange={(e) => setUseLocalQwen(e.target.checked)}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setUseLocalQwen(checked);
+                  if (checked) setUseQwen(false);
+                }}
               />
               <div className="qw-toggle-track"></div>
               <span>启用本地 Qwen</span>
