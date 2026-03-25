@@ -894,6 +894,7 @@ export default function App() {
     ].slice(-MAX_RENDER_MESSAGES));
 
     if (useStreamWS) {
+      let wsRequestFinished = false;
       socket.connect({
         onMeta: (meta) => setConversationId(meta.conversation_id),
         onThinking: (thinkingEvent) => {
@@ -979,6 +980,7 @@ export default function App() {
           enqueueStreamDelta(assistantMessageId, text);
         },
         onDone: (payload) => {
+          wsRequestFinished = true;
           flushStreamDelta();
           const sourceItems = normalizeSourceItems(payload?.sources);
           patchChatMessage(assistantMessageId, (message) => ({
@@ -995,12 +997,19 @@ export default function App() {
           setSending(false);
         },
         onError: (message) => {
+          wsRequestFinished = true;
           flushStreamDelta();
           setError(message);
           markAssistantError(assistantMessageId, message);
           setSending(false);
         },
         onClose: () => {
+          if (!wsRequestFinished) {
+            const closeMessage = "流式连接中断，请重试";
+            flushStreamDelta();
+            setError(closeMessage);
+            markAssistantError(assistantMessageId, closeMessage);
+          }
           setSending(false);
         }
       });

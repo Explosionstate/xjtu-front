@@ -82,6 +82,18 @@ http.interceptors.response.use(
 
 export function normalizeError(error: unknown): Error {
   if (axios.isAxiosError(error)) {
+    const rawMessage = String(error.message || "");
+    if (/ERR_CONNECTION_RESET|socket hang up/i.test(rawMessage)) {
+      return new Error("连接被服务端重置（本地模型进程可能异常退出），请重试");
+    }
+    const timeoutLike =
+      error.code === "ECONNABORTED" || /timeout|timed out/i.test(rawMessage);
+    if (timeoutLike) {
+      return new Error("请求超时，请重试或改为更短的问题");
+    }
+    if (!error.response && rawMessage === "Network Error") {
+      return new Error("网络连接失败，请检查后端服务或网络状态");
+    }
     const responseData = error.response?.data as unknown;
     if (isApiEnvelope(responseData)) {
       if (Number(responseData.code) === 70005) {

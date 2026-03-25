@@ -69,7 +69,10 @@ export class ChatSocket {
     };
 
     this.socket.onerror = () => this.handlers.onError?.("WebSocket 连接失败");
-    this.socket.onclose = () => {
+    this.socket.onclose = (event) => {
+      if (event.code !== 1000 && event.code !== 1001) {
+        this.handlers.onError?.(`WebSocket 连接中断（code=${event.code}）`);
+      }
       this.handlers.onClose?.();
       this.socket = null;
       this.pendingPayloads = [];

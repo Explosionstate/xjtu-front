@@ -1,6 +1,21 @@
 import { http } from "./http";
 import type { ChatCompletionResponse } from "../types/api";
 
+const CHAT_TIMEOUT_CLOUD_MS = 130000;
+const CHAT_TIMEOUT_LOCAL_MS = 240000;
+const CHAT_TIMEOUT_RETRIEVAL_MS = 90000;
+
+function resolveChatTimeoutMs(payload: {
+  llm_enabled?: boolean;
+  local_transformer_enabled?: boolean;
+}): number {
+  const cloudEnabled = Boolean(payload.llm_enabled);
+  const localEnabled = Boolean(payload.local_transformer_enabled);
+  if (cloudEnabled) return CHAT_TIMEOUT_CLOUD_MS;
+  if (localEnabled) return CHAT_TIMEOUT_LOCAL_MS;
+  return CHAT_TIMEOUT_RETRIEVAL_MS;
+}
+
 export async function chatCompletions(payload: {
   conversation_id?: string;
   agent_key?: string;
@@ -19,9 +34,14 @@ export async function chatCompletions(payload: {
   const isAcademicAnalysis =
     isStudentGrowth && /学业分析|学习分析|成绩分析|学情分析/.test(latestQuestion);
 
-  const { data } = await http.post<ChatCompletionResponse>("/chat/completions", payload, {
-    timeout: 120000
-  });
+  const timeout = resolveChatTimeoutMs(payload);
+  const { data } = await http.post<ChatCompletionResponse>(
+    "/chat/completions",
+    payload,
+    {
+      timeout
+    }
+  );
   return data;
 }
 
@@ -36,7 +56,7 @@ export async function retrievalDebug(payload: {
   alpha?: number;
 }) {
   const { data } = await http.post("/chat/retrieval-debug", payload, {
-    timeout: 120000
+    timeout: CHAT_TIMEOUT_RETRIEVAL_MS
   });
   return data;
 }
