@@ -122,6 +122,15 @@ export interface AcademicAnalysisResponse {
   generated_at: string;
 }
 
+export interface AcademicInterpretResponse {
+  analysis: AcademicAnalysisResponse;
+  interpretation: string;
+  detail_level: "brief" | "detailed";
+  llm_mode: string;
+  tool_used: boolean;
+  generated_at: string;
+}
+
 export interface KnowledgeBaseItem {
   id: string;
   name: string;

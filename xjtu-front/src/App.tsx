@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import type { ReactNode } from "react";
-import { getMyAcademicAnalysis } from "./api/academic";
+import { getMyAcademicAnalysis, interpretMyAcademicAnalysis } from "./api/academic";
 
 import { me, ssoExchange } from "./api/auth";
 import { chatCompletions, retrievalDebug } from "./api/chat";
@@ -17,6 +17,7 @@ import {
 import { getRuntimeDebug } from "./api/runtime";
 import type {
   AcademicAnalysisResponse,
+  AcademicInterpretResponse,
   AcademicCohortComparisonItem,
   ChatLogItem,
   ChatThinking as ApiChatThinking,
@@ -547,6 +548,8 @@ export default function App() {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [academicData, setAcademicData] = useState<AcademicAnalysisResponse | null>(null);
   const [academicLoading, setAcademicLoading] = useState(false);
+  const [academicInterpretLoading, setAcademicInterpretLoading] = useState(false);
+  const [academicInterpret, setAcademicInterpret] = useState<AcademicInterpretResponse | null>(null);
   const [academicExpanded, setAcademicExpanded] = useState(true);
   const [rightPanelSections, setRightPanelSections] = useState<RightPanelSectionState>({
     summary: true,
@@ -1098,9 +1101,28 @@ export default function App() {
       try {
         const data = await getMyAcademicAnalysis(termCode);
         setAcademicData(data);
+        setAcademicInterpret(null);
         setError(`学业分析已更新：${data.term.term_name}，风险等级 ${data.risk_level}`);
       } finally {
         setAcademicLoading(false);
+      }
+    });
+  };
+
+  const loadAcademicInterpretation = (termCode?: string) => {
+    if (!tokenReady || userRole !== "student") {
+      setError("仅学生可使用学业分析解读功能");
+      return;
+    }
+    runSafely(async () => {
+      setAcademicInterpretLoading(true);
+      try {
+        const data = await interpretMyAcademicAnalysis(termCode, "brief");
+        setAcademicData(data.analysis);
+        setAcademicInterpret(data);
+        setError(`AI解读已生成：${data.analysis.term.term_name}（${data.detail_level}）`);
+      } finally {
+        setAcademicInterpretLoading(false);
       }
     });
   };
@@ -1319,6 +1341,13 @@ export default function App() {
                 >
                   {academicLoading ? "学业分析加载中..." : "获取学业分析"}
                 </button>
+                <button
+                  className="qw-btn qw-btn-subtle"
+                  onClick={() => loadAcademicInterpretation(academicData?.term.term_code)}
+                  disabled={academicInterpretLoading || academicLoading}
+                >
+                  {academicInterpretLoading ? "AI解读生成中..." : "AI解读"}
+                </button>
                 {academicData && (
                   <button
                     className="qw-btn qw-btn-subtle"
@@ -1487,6 +1516,22 @@ export default function App() {
                     <div className="qw-empty-text">当前学期暂无课程成绩数据。</div>
                   )}
                 </article>
+
+                {academicInterpret && (
+                  <article className="qw-academic-card qw-academic-card-full">
+                    <h3>AI解读（基于当前学业分析）</h3>
+                    <p className="qw-section-tip qw-academic-inline-tip">
+                      工具来源：学业分析服务 ｜ 细节等级：{academicInterpret.detail_level} ｜
+                      模型模式：{academicInterpret.llm_mode}
+                    </p>
+                    {academicInterpret.llm_mode.includes("fallback") && (
+                      <p className="qw-section-tip qw-academic-inline-tip">
+                        本次解读触发模型兜底，已返回稳定版结构化解读。
+                      </p>
+                    )}
+                    <div className="qw-academic-interpret-text">{academicInterpret.interpretation}</div>
+                  </article>
+                )}
               </div>
             )}
           </section>

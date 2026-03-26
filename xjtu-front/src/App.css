@@ -726,6 +726,14 @@ textarea {
   font-size: 14px;
 }
 
+.qw-academic-interpret-text {
+  margin-top: 12px;
+  white-space: pre-wrap;
+  color: var(--qw-text-primary);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
 .qw-chat-scroll,
 .qw-academic-content,
 .qw-right-scroll,
